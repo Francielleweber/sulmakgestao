@@ -1,0 +1,2546 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sulmak Locações — Gestão de Folha de Pagamento</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+<style>
+  :root {
+    --bg: #F5F4F0;
+    --surface: #FFFFFF;
+    --surface2: #ECEAE4;
+    --border: #D8D5CE;
+    --border2: #C8C4BB;
+    --text: #012f24;
+    --text2: #6B6860;
+    --text3: #9C9A93;
+    --accent: #1B4F8A;
+    --accent-light: #E8EFF8;
+    --accent-text: #1B4F8A;
+    --green: #1A6B45;
+    --green-bg: #E6F4EE;
+    --red: #8B2020;
+    --red-bg: #FAE8E8;
+    --amber: #7A4F00;
+    --amber-bg: #FDF3DC;
+    --radius: 10px;
+    --radius-sm: 6px;
+    --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
+    --shadow-md: 0 4px 12px rgba(0,0,0,0.1), 0 2px 4px rgba(0,0,0,0.06);
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: 'DM Sans', sans-serif;
+    font-size: 14px;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+  }
+
+  /* ── LAYOUT ── */
+  .app { display: flex; min-height: 100vh; }
+
+  .sidebar {
+    width: 240px;
+    min-width: 240px;
+    background: var(--text);
+    color: white;
+    display: flex;
+    flex-direction: column;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+  }
+
+  .logo {
+    padding: 24px 20px 20px;
+    border-bottom: 1px solid rgba(255,255,255,0.1);
+  }
+  .logo h1 { font-size: 18px; font-weight: 600; letter-spacing: -0.3px; }
+  .logo p { font-size: 11px; color: rgba(255,255,255,0.45); margin-top: 3px; font-family: 'DM Mono', monospace; }
+
+  .gs-status-bar {
+    margin: 12px 16px;
+    background: rgba(250, 97, 97, 0.07);
+    border-radius: var(--radius-sm);
+    padding: 8px 12px;
+    font-size: 11px;
+    color: rgba(255,255,255,0.6);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .gs-dot { width: 7px; height: 7px; border-radius: 50%; background: #4CAF50; flex-shrink: 0; }
+  .gs-dot.off { background: #ff6b6b; }
+
+  .nav-section {
+    padding: 16px 20px 6px;
+    font-size: 10px;
+    font-weight: 500;
+    color: rgba(255,255,255,0.3);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .nav-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 20px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 400;
+    color: rgba(255,255,255,0.65);
+    transition: all 0.15s;
+    border-left: 2px solid transparent;
+  }
+  .nav-item:hover { color: white; background: rgba(255,255,255,0.06); }
+  .nav-item.active {
+    color: white;
+    background: rgba(255,255,255,0.1);
+    border-left-color: #5B9BD5;
+    font-weight: 500;
+  }
+  .nav-icon { width: 16px; height: 16px; flex-shrink: 0; opacity: 0.7; }
+  .nav-item.active .nav-icon { opacity: 1; }
+
+  .sidebar-footer {
+    margin-top: auto;
+    padding: 16px 20px;
+    border-top: 1px solid rgba(255,255,255,0.1);
+    font-size: 11px;
+    color: rgba(255,255,255,0.3);
+  }
+
+  .main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+
+  .topbar {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 14px 28px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+  .topbar-left h2 { font-size: 17px; font-weight: 600; letter-spacing: -0.2px; }
+  .topbar-left p { font-size: 12px; color: var(--text3); margin-top: 1px; }
+  .topbar-right { display: flex; align-items: center; gap: 8px; }
+
+  .content { flex: 1; padding: 28px; overflow-y: auto; }
+
+  /* ── BUTTONS ── */
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 8px 16px;
+    border-radius: var(--radius-sm);
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    cursor: pointer;
+    font-size: 13px;
+    font-family: 'DM Sans', sans-serif;
+    font-weight: 500;
+    transition: all 0.15s;
+    box-shadow: var(--shadow);
+    white-space: nowrap;
+  }
+  .btn:hover { border-color: var(--border2); background: var(--surface2); }
+  .btn:active { transform: scale(0.98); }
+  .btn.primary { background: var(--accent); color: white; border-color: var(--accent); box-shadow: 0 2px 8px rgba(27,79,138,0.3); }
+  .btn.primary:hover { background: #153F6E; }
+  .btn.success { background: var(--green); color: white; border-color: var(--green); }
+  .btn.danger-btn { background: var(--red-bg); color: var(--red); border-color: #e8b4b4; }
+  .btn.danger-btn:hover { background: #f5d0d0; }
+  .btn.inativar-btn { background: var(--amber-bg); color: var(--amber); border-color: #e8d48b; }
+  .btn.inativar-btn:hover { background: #fbe9b0; }
+  .btn.ativar-btn { background: var(--green-bg); color: var(--green); border-color: #a8d8bf; }
+  .btn.ativar-btn:hover { background: #c8e8d8; }
+  .btn-sm { padding: 5px 10px; font-size: 12px; }
+  .btn-xs { padding: 3px 8px; font-size: 11px; }
+  .btn-icon { padding: 6px; width: 30px; height: 30px; justify-content: center; }
+
+  /* ── CARDS ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    box-shadow: var(--shadow);
+    margin-bottom: 20px;
+  }
+  .card-header {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .card-header h3 { font-size: 14px; font-weight: 600; }
+  .card-body { padding: 20px; }
+  .card-body.no-pad { padding: 0; }
+
+  /* ── METRICS ── */
+  .metrics-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 24px; }
+  .metric-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 18px 20px;
+    box-shadow: var(--shadow);
+  }
+  .metric-card .label { font-size: 11px; color: var(--text3); font-weight: 500; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+  .metric-card .value { font-size: 22px; font-weight: 600; letter-spacing: -0.5px; }
+  .metric-card .sub { font-size: 11px; color: var(--text3); margin-top: 4px; }
+
+  /* ── FORMS ── */
+  .field { margin-bottom: 14px; }
+  .field label { display: block; font-size: 12px; font-weight: 500; color: var(--text2); margin-bottom: 5px; }
+  .field input, .field select, .field textarea {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--text);
+    font-size: 13px;
+    font-family: 'DM Sans', sans-serif;
+    transition: border-color 0.15s;
+  }
+  .field input:focus, .field select:focus, .field textarea:focus {
+    outline: none;
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(27,79,138,0.1);
+  }
+  .field textarea { resize: vertical; min-height: 72px; }
+  .field.required label::after { content: ' *'; color: var(--red); }
+
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 14px; }
+  .grid-4 { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 14px; }
+
+  /* ── TABLE ── */
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; }
+  thead th {
+    text-align: left;
+    padding: 10px 16px;
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text3);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+  }
+  tbody td { padding: 12px 16px; border-bottom: 1px solid var(--border); font-size: 13px; }
+  tbody tr:last-child td { border-bottom: none; }
+  tbody tr:hover td { background: var(--bg); }
+
+  /* ── BADGES ── */
+  .badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 3px 9px;
+    border-radius: 100px;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+  }
+  .badge-green { background: var(--green-bg); color: var(--green); }
+  .badge-red { background: var(--red-bg); color: var(--red); }
+  .badge-amber { background: var(--amber-bg); color: var(--amber); }
+  .badge-blue { background: var(--accent-light); color: var(--accent-text); }
+  .badge-gray { background: var(--surface2); color: var(--text2); }
+
+  /* ── TABS ── */
+  .tabs { display: flex; border-bottom: 1px solid var(--border); margin-bottom: 20px; }
+  .tab {
+    padding: 10px 18px;
+    cursor: pointer;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--text3);
+    border-bottom: 2px solid transparent;
+    transition: all 0.15s;
+    margin-bottom: -1px;
+  }
+  .tab:hover { color: var(--text2); }
+  .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+  /* ── MODAL ── */
+  .modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(10,10,8,0.55);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+    padding: 20px;
+    backdrop-filter: blur(2px);
+  }
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    width: 640px;
+    max-width: 100%;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: var(--shadow-md);
+  }
+  .modal-header {
+    padding: 18px 22px;
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+  }
+  .modal-header h3 { font-size: 15px; font-weight: 600; }
+  .modal-body { padding: 22px; overflow-y: auto; flex: 1; }
+  .modal-footer {
+    padding: 14px 22px;
+    border-top: 1px solid var(--border);
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+    flex-shrink: 0;
+    background: var(--bg);
+    border-radius: 0 0 14px 14px;
+  }
+
+  /* ── MISC ── */
+  .avatar {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: var(--accent-light);
+    color: var(--accent);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 12px;
+    font-weight: 600;
+    flex-shrink: 0;
+  }
+  .search-row { display: flex; gap: 8px; margin-bottom: 16px; }
+  .search-input {
+    flex: 1;
+    padding: 8px 14px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--surface);
+    color: var(--text);
+    font-size: 13px;
+    font-family: 'DM Sans', sans-serif;
+  }
+  .search-input:focus { outline: none; border-color: var(--accent); }
+
+  .empty-state {
+    text-align: center;
+    padding: 48px 20px;
+    color: var(--text3);
+  }
+  .empty-state .icon { font-size: 32px; margin-bottom: 10px; }
+  .empty-state h4 { font-size: 15px; font-weight: 600; color: var(--text2); margin-bottom: 6px; }
+  .empty-state p { font-size: 13px; }
+
+  .upload-area {
+    border: 2px dashed var(--border);
+    border-radius: var(--radius-sm);
+    padding: 18px;
+    text-align: center;
+    cursor: pointer;
+    transition: all 0.15s;
+    color: var(--text3);
+    font-size: 13px;
+  }
+  .upload-area:hover { border-color: var(--accent); background: var(--accent-light); color: var(--accent); }
+  .upload-area.has-file { border-color: var(--green); background: var(--green-bg); color: var(--green); }
+
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    padding: 12px 18px;
+    border-radius: var(--radius);
+    font-size: 13px;
+    font-weight: 500;
+    z-index: 9999;
+    opacity: 0;
+    transform: translateY(8px);
+    transition: all 0.25s;
+    pointer-events: none;
+    box-shadow: var(--shadow-md);
+    max-width: 320px;
+  }
+  .toast.show { opacity: 1; transform: translateY(0); }
+  .toast.ok { background: var(--text); color: white; }
+  .toast.err { background: var(--red); color: white; }
+
+  .loading-bar {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    background: var(--accent);
+    z-index: 9999;
+    transform: scaleX(0);
+    transform-origin: left;
+    transition: transform 0.3s;
+  }
+  .loading-bar.active { animation: loadAnim 1.5s ease-in-out infinite; }
+  @keyframes loadAnim { 0%{transform:scaleX(0)} 50%{transform:scaleX(0.7)} 100%{transform:scaleX(1)} }
+
+  .info-banner {
+    background: var(--accent-light);
+    border: 1px solid #B8CEE8;
+    border-radius: var(--radius-sm);
+    padding: 12px 16px;
+    font-size: 13px;
+    color: var(--accent);
+    margin-bottom: 18px;
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+    line-height: 1.5;
+  }
+
+  .section-divider {
+    font-size: 11px;
+    font-weight: 600;
+    color: var(--text3);
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    margin: 20px 0 12px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .holerite-line {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 7px 0;
+    border-bottom: 1px dashed var(--border);
+    font-size: 13px;
+  }
+  .holerite-line:last-child { border-bottom: none; }
+  .holerite-total {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 14px;
+    background: var(--text);
+    color: white;
+    border-radius: var(--radius-sm);
+    font-weight: 600;
+    margin-top: 8px;
+  }
+
+  @media (max-width: 900px) {
+    .sidebar { width: 200px; min-width: 200px; }
+    .metrics-grid { grid-template-columns: repeat(2, 1fr); }
+    .grid-4 { grid-template-columns: repeat(2, 1fr); }
+  }
+  @media (max-width: 640px) {
+    .sidebar { display: none; }
+    .content { padding: 16px; }
+    .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+    .metrics-grid { grid-template-columns: 1fr 1fr; }
+  }
+
+  /* ── LOGIN ── */
+  #login-screen {
+    position: fixed;
+    inset: 0;
+    background: var(--bg);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 99999;
+  }
+  .login-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    box-shadow: var(--shadow-md);
+    padding: 40px 36px 36px;
+    width: 380px;
+    max-width: calc(100vw - 32px);
+  }
+  .login-logo {
+    text-align: center;
+    margin-bottom: 28px;
+  }
+  .login-logo h1 { font-size: 20px; font-weight: 600; color: var(--text); letter-spacing: -0.3px; }
+  .login-logo p { font-size: 12px; color: var(--text3); margin-top: 4px; font-family: 'DM Mono', monospace; }
+  .login-title {
+    font-size: 15px;
+    font-weight: 600;
+    color: var(--text);
+    margin-bottom: 20px;
+  }
+  .login-error {
+    background: var(--red-bg);
+    border: 1px solid #e8b4b4;
+    border-radius: var(--radius-sm);
+    color: var(--red);
+    font-size: 13px;
+    padding: 10px 14px;
+    margin-bottom: 16px;
+    display: none;
+  }
+  .login-btn {
+    width: 100%;
+    padding: 11px;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: var(--radius-sm);
+    font-size: 14px;
+    font-weight: 600;
+    font-family: 'DM Sans', sans-serif;
+    cursor: pointer;
+    margin-top: 6px;
+    transition: background 0.15s;
+    box-shadow: 0 2px 8px rgba(27,79,138,0.3);
+  }
+  .login-btn:hover { background: #153F6E; }
+  .login-btn:active { transform: scale(0.98); }
+  .login-footer {
+    text-align: center;
+    font-size: 11px;
+    color: var(--text3);
+    margin-top: 20px;
+  }
+</style>
+</head>
+<body>
+
+<div class="loading-bar" id="loading-bar"></div>
+<div class="toast" id="toast"></div>
+
+<div id="login-screen">
+  <div class="login-card">
+    <div class="login-logo">
+      <h1>Sulmak Locações</h1>
+      <p>Gestão de Folha de Pagamento</p>
+    </div>
+    <div class="login-title">Entrar no sistema</div>
+    <div class="login-error" id="login-error">Usuário ou senha incorretos.</div>
+    <div class="field">
+      <label>Usuário</label>
+      <input type="text" id="login-user" placeholder="Digite seu usuário" autocomplete="username" />
+    </div>
+    <div class="field">
+      <label>Senha</label>
+      <input type="password" id="login-pass" placeholder="Digite sua senha" autocomplete="current-password" />
+    </div>
+    <button class="login-btn" onclick="doLogin()">Entrar</button>
+    <div class="login-footer">Sulmak Locações · Sistema interno</div>
+  </div>
+</div>
+
+<div class="app" id="main-app" style="display:none">
+  <!-- SIDEBAR -->
+  <aside class="sidebar">
+    <div class="logo">
+      <img src="logo.jpeg" alt="Sulmak Locações" width="150px">
+      <h1>Sulmak Locações</h1>
+      <p>v2.0 · Google Sheets</p>
+    </div>
+
+    <div class="gs-status-bar" id="gs-status-bar">
+      <div class="gs-dot off" id="gs-dot"></div>
+      <span id="gs-status-text">Não conectado</span>
+    </div>
+
+    <nav>
+      <div class="nav-section">Principal</div>
+      <div class="nav-item active" onclick="nav('dashboard')" id="nav-dashboard">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="none"><rect x="1.5" y="1.5" width="5.5" height="5.5" rx="1" fill="white" opacity="0.8"/><rect x="9" y="1.5" width="5.5" height="5.5" rx="1" fill="white" opacity="0.5"/><rect x="1.5" y="9" width="5.5" height="5.5" rx="1" fill="white" opacity="0.5"/><rect x="9" y="9" width="5.5" height="5.5" rx="1" fill="white" opacity="0.8"/></svg>
+        Dashboard
+      </div>
+      <div class="nav-item" onclick="nav('config')" id="nav-config">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="8" r="2.5" stroke="white" stroke-width="1.3"/><path d="M8 1.5v1.7M8 12.8v1.7M1.5 8h1.7M12.8 8h1.7M3.4 3.4l1.2 1.2M11.4 11.4l1.2 1.2M12.6 3.4l-1.2 1.2M4.6 11.4l-1.2 1.2" stroke="white" stroke-width="1.3" stroke-linecap="round"/></svg>
+        Configurações
+      </div>
+
+      <div class="nav-section">Cadastros</div>
+      <div class="nav-item" onclick="nav('funcionarios')" id="nav-funcionarios">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="none"><circle cx="8" cy="5" r="2.8" stroke="white" stroke-width="1.3"/><path d="M2.5 13.5c0-3 2.5-5.5 5.5-5.5s5.5 2.5 5.5 5.5" stroke="white" stroke-width="1.3" opacity="0.7"/></svg>
+        Funcionários
+      </div>
+
+      <div class="nav-section">Folha</div>
+      <div class="nav-item" onclick="nav('lancamentos')" id="nav-lancamentos">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="none"><rect x="2" y="2" width="12" height="12" rx="1.5" stroke="white" stroke-width="1.3" opacity="0.8"/><path d="M5 5.5h6M5 8h6M5 10.5h4" stroke="white" stroke-width="1.3" stroke-linecap="round"/></svg>
+        Lançamentos
+      </div>
+      <div class="nav-item" onclick="nav('holerite')" id="nav-holerite">
+        <svg class="nav-icon" viewBox="0 0 16 16" fill="none"><path d="M3 2h7l3 3v9a1 1 0 01-1 1H3a1 1 0 01-1-1V3a1 1 0 011-1z" stroke="white" stroke-width="1.3"/><path d="M10 2v3h3" stroke="white" stroke-width="1.3"/><path d="M5 8h6M5 10.5h4" stroke="white" stroke-width="1.3" stroke-linecap="round"/></svg>
+        Holerites / PDF
+      </div>
+    </nav>
+
+    <div class="sidebar-footer">
+      Dados via Google Sheets
+    </div>
+  </aside>
+
+  <!-- MAIN -->
+  <div class="main">
+    <header class="topbar">
+      <div class="topbar-left">
+        <h2 id="page-title">Dashboard</h2>
+        <p id="page-sub">Visão geral do sistema</p>
+      </div>
+      <div class="topbar-right">
+        <span id="mes-label" style="font-size:12px;color:var(--text3);font-family:'DM Mono',monospace;"></span>
+        <button class="btn btn-sm" onclick="syncAll()" title="Sincronizar com Google Sheets">
+          <svg width="13" height="13" viewBox="0 0 16 16" fill="none"><path d="M14 8A6 6 0 112 8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><path d="M14 4v4h-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+          Sincronizar
+        </button>
+      </div>
+    </header>
+
+    <main class="content" id="content"></main>
+  </div>
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════
+//  STATE & CONFIG
+// ═══════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════
+//  LOGIN
+// ═══════════════════════════════════════════════════════
+const USERS = [
+  { user: 'admin',   pass: '310318' },
+  { user: 'gisele@sulmak',  pass: 'sulmak123'   }
+  
+];
+const SESSION_KEY = 'folhapay_session';
+
+function doLogin() {
+  const user = document.getElementById('login-user').value.trim();
+  const pass = document.getElementById('login-pass').value;
+  const match = USERS.find(u => u.user === user && u.pass === pass);
+  if (match) {
+    sessionStorage.setItem(SESSION_KEY, user);
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('main-app').style.display = 'flex';
+    // Auto-sync ao entrar se a URL já estiver configurada
+    if (config.gsUrl) syncAll();
+  } else {
+    document.getElementById('login-error').style.display = 'block';
+    document.getElementById('login-pass').value = '';
+    document.getElementById('login-pass').focus();
+  }
+}
+
+// Permitir Enter nos campos de login
+document.addEventListener('DOMContentLoaded', () => {
+  ['login-user','login-pass'].forEach(id => {
+    document.getElementById(id)?.addEventListener('keydown', e => {
+      if (e.key === 'Enter') doLogin();
+    });
+  });
+  // Verificar sessão ativa
+  if (sessionStorage.getItem(SESSION_KEY)) {
+    document.getElementById('login-screen').style.display = 'none';
+    document.getElementById('main-app').style.display = 'flex';
+    // Auto-sync ao reabrir o app se a URL já estiver configurada
+    if (config.gsUrl) syncAll();
+  } else {
+    document.getElementById('login-user')?.focus();
+  }
+});
+
+const CONFIG_KEY = 'folhapay_config';
+const CACHE_KEY  = 'folhapay_cache';
+
+let config = JSON.parse(localStorage.getItem(CONFIG_KEY) || '{}');
+let cache  = JSON.parse(localStorage.getItem(CACHE_KEY)  || '{"funcionarios":[],"lancamentos":[]}');
+
+function saveConfig() { localStorage.setItem(CONFIG_KEY, JSON.stringify(config)); }
+function saveCache() {
+  const semBase64 = { ...cache, lancamentos: cache.lancamentos.map(l => { const c={...l}; delete c.anexoBase64; return c; }) };
+  try { localStorage.setItem(CACHE_KEY, JSON.stringify(semBase64)); } catch(e) { console.warn('cache cheio',e); }
+}
+function salvarAnexo(id, dados) {
+  try { localStorage.setItem('fp_anexo_'+id, JSON.stringify(dados)); return true; }
+  catch(e) { showToast('Sem espaço no navegador para salvar o arquivo.','err'); return false; }
+}
+function lerAnexo(id) {
+  try { const r=localStorage.getItem('fp_anexo_'+id); return r?JSON.parse(r):null; } catch(e){ return null; }
+}
+function apagarAnexo(id) { localStorage.removeItem('fp_anexo_'+id); }
+
+// ═══════════════════════════════════════════════════════
+//  GOOGLE SHEETS API
+// ═══════════════════════════════════════════════════════
+async function gsCall(action, payload={}) {
+  if (!config.gsUrl) throw new Error('URL do Google Apps Script não configurada.');
+  showLoading(true);
+  try {
+    const res = await fetch(config.gsUrl, {
+      method: 'POST',
+      redirect: 'follow',
+      headers: { 'Content-Type': 'text/plain' },
+      body: JSON.stringify({ action, ...payload })
+    });
+    const text = await res.text();
+    const data = JSON.parse(text);
+    if (!data.ok) throw new Error(data.error || 'Erro desconhecido');
+    return data;
+  } finally {
+    showLoading(false);
+  }
+}
+
+async function syncAll() {
+  if (!config.gsUrl) { showToast('Configure a URL do Google Sheets primeiro.', 'err'); nav('config'); return; }
+  try {
+    showToast('Sincronizando...', 'ok');
+    const r = await gsCall('getAll');
+    cache.funcionarios = r.funcionarios || [];
+    cache.lancamentos  = r.lancamentos  || [];
+    saveCache();
+    updateGSStatus(true);
+    showToast('✓ Sincronizado com sucesso!', 'ok');
+    render(currentPage);
+  } catch(e) {
+    showToast('Erro: ' + e.message, 'err');
+    updateGSStatus(false);
+  }
+}
+
+async function saveFuncionario(obj) {
+  const r = await gsCall('saveFuncionario', { data: obj });
+  return r;
+}
+
+async function deleteFuncionario(id) {
+  const r = await gsCall('deleteFuncionario', { id });
+  return r;
+}
+
+async function saveLancamento(obj) {
+  const r = await gsCall('saveLancamento', { data: obj });
+  return r;
+}
+
+async function deleteLancamento(id) {
+  const r = await gsCall('deleteLancamento', { id });
+  return r;
+}
+
+function updateGSStatus(connected) {
+  document.getElementById('gs-dot').className = 'gs-dot' + (connected ? '' : ' off');
+  document.getElementById('gs-status-text').textContent = connected ? 'Conectado' : 'Não conectado';
+}
+
+// ═══════════════════════════════════════════════════════
+//  UI HELPERS
+// ═══════════════════════════════════════════════════════
+let toastTimer;
+function showToast(msg, type='ok') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast show ' + type;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.className = 'toast', 3000);
+}
+
+function showLoading(on) {
+  document.getElementById('loading-bar').className = 'loading-bar' + (on ? ' active' : '');
+}
+
+let modalEl = null;
+function openModal(html) {
+  closeModal();
+  const el = document.createElement('div');
+  el.className = 'modal-overlay';
+  el.innerHTML = html;
+  el.addEventListener('click', e => { if(e.target === el) closeModal(); });
+  document.body.appendChild(el);
+  modalEl = el;
+  return el;
+}
+function closeModal() { if (modalEl) { modalEl.remove(); modalEl = null; } }
+
+function fmt(v) {
+  return Number(v || 0).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' });
+}
+function fmtDate(d) {
+  if (!d) return '—';
+  const parts = String(d).split('-');
+  if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+  return d;
+}
+function initials(name) {
+  return String(name || '?').split(' ').slice(0, 2).map(w => w[0]||'').join('').toUpperCase();
+}
+function uid() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+}
+
+// ═══════════════════════════════════════════════════════
+//  NAVIGATION
+// ═══════════════════════════════════════════════════════
+let currentPage = 'dashboard';
+
+const PAGE_META = {
+  dashboard:    { title: 'Dashboard',           sub: 'Visão geral do sistema' },
+  config:       { title: 'Configurações',        sub: 'Conectar ao Google Sheets' },
+  funcionarios: { title: 'Funcionários',         sub: 'Cadastro de colaboradores' },
+  lancamentos:  { title: 'Lançamentos Mensais',  sub: 'Registros de folha' },
+  holerite:     { title: 'Holerites & Relatórios', sub: 'Geração de PDF' },
+};
+
+function nav(page) {
+  currentPage = page;
+  document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
+  const navEl = document.getElementById('nav-' + page);
+  if (navEl) navEl.classList.add('active');
+  const meta = PAGE_META[page] || {};
+  document.getElementById('page-title').textContent = meta.title || page;
+  document.getElementById('page-sub').textContent   = meta.sub   || '';
+  render(page);
+}
+
+function render(page) {
+  const c = document.getElementById('content');
+  c.innerHTML = '';
+  if (page === 'dashboard')    renderDashboard(c);
+  else if (page === 'config')       renderConfig(c);
+  else if (page === 'funcionarios') renderFuncionarios(c);
+  else if (page === 'lancamentos')  renderLancamentos(c);
+  else if (page === 'holerite')     renderHolerite(c);
+}
+
+// ═══════════════════════════════════════════════════════
+//  DASHBOARD
+// ═══════════════════════════════════════════════════════
+function renderDashboard(c) {
+  const ativos    = cache.funcionarios.filter(f => !f.dataDemissao || f.dataDemissao === '').length;
+  const demitidos = cache.funcionarios.filter(f => f.dataDemissao && f.dataDemissao !== '').length;
+  const mesAtual  = new Date().toISOString().slice(0, 7);
+  const lancMes   = cache.lancamentos.filter(l => l.mes === mesAtual);
+  const folhaBruta = cache.funcionarios
+    .filter(f => !f.dataDemissao || f.dataDemissao === '')
+    .reduce((s, f) => s + Number(f.salario || 0), 0);
+
+  c.innerHTML = `
+    <div class="metrics-grid">
+      <div class="metric-card">
+        <div class="label">Funcionários Ativos</div>
+        <div class="value">${ativos}</div>
+        <div class="sub">${demitidos} demitido(s)</div>
+      </div>
+      <div class="metric-card">
+        <div class="label">Folha Bruta — ${mesAtual}</div>
+        <div class="value" style="font-size:18px;">${fmt(folhaBruta)}</div>
+        <div class="sub">salários base</div>
+      </div>
+      <div class="metric-card">
+        <div class="label">Lançamentos — ${mesAtual}</div>
+        <div class="value">${lancMes.length}</div>
+        <div class="sub">registros no mês</div>
+      </div>
+      <div class="metric-card">
+        <div class="label">Total Cadastros</div>
+        <div class="value">${cache.funcionarios.length}</div>
+        <div class="sub">${cache.lancamentos.length} lançamentos totais</div>
+      </div>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+      <div class="card">
+        <div class="card-header">
+          <h3>Funcionários Recentes</h3>
+          <button class="btn btn-sm" onclick="nav('funcionarios')">Ver todos</button>
+        </div>
+        <div class="card-body no-pad">
+          ${cache.funcionarios.length === 0
+            ? `<div class="empty-state"><div class="icon">👥</div><h4>Nenhum funcionário</h4><p>Cadastre colaboradores para começar</p></div>`
+            : cache.funcionarios.slice(-6).reverse().map(f => `
+              <div style="display:flex;align-items:center;gap:12px;padding:12px 16px;border-bottom:1px solid var(--border);">
+                <div class="avatar">${initials(f.nome)}</div>
+                <div style="flex:1;min-width:0;">
+                  <div style="font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${f.nome}</div>
+                  <div style="font-size:11px;color:var(--text3);">${f.cargo || '—'}</div>
+                </div>
+                <span class="badge ${(f.dataDemissao && f.dataDemissao !== '') ? 'badge-red' : 'badge-green'}">${(f.dataDemissao && f.dataDemissao !== '') ? 'Demitido' : 'Ativo'}</span>
+              </div>
+            `).join('')}
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-header">
+          <h3>Últimos Lançamentos</h3>
+          <button class="btn btn-sm" onclick="nav('lancamentos')">Ver todos</button>
+        </div>
+        <div class="card-body no-pad">
+          ${cache.lancamentos.length === 0
+            ? `<div class="empty-state"><div class="icon">📋</div><h4>Nenhum lançamento</h4><p>Registre movimentações mensais aqui</p></div>`
+            : cache.lancamentos.slice(-8).reverse().map(l => {
+                const f = cache.funcionarios.find(x => x.id === l.funcionarioId);
+                return `
+                  <div style="display:flex;align-items:center;gap:12px;padding:10px 16px;border-bottom:1px solid var(--border);">
+                    <span class="badge ${badgeClass(l.tipo)}" style="min-width:80px;justify-content:center;">${l.tipo}</span>
+                    <div style="flex:1;min-width:0;">
+                      <div style="font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${f ? f.nome : '—'}</div>
+                      <div style="font-size:11px;color:var(--text3);font-family:'DM Mono',monospace;">${l.mes}</div>
+                    </div>
+                    <div style="font-size:13px;font-weight:500;font-family:'DM Mono',monospace;">${l.valor ? fmt(l.valor) : (l.quantidade ? l.quantidade + ' ' + (l.unidade||'') : '—')}</div>
+                  </div>
+                `;
+              }).join('')}
+        </div>
+      </div>
+    </div>
+
+    ${!config.gsUrl ? `
+      <div class="info-banner" style="margin-top:20px;">
+        ⚠️ <span><b>Configure o Google Sheets</b> para persistir seus dados. <a href="#" onclick="nav('config')" style="color:var(--accent);font-weight:600;">Clique aqui para configurar →</a></span>
+      </div>
+    ` : ''}
+  `;
+}
+
+// ═══════════════════════════════════════════════════════
+//  CONFIGURAÇÕES
+// ═══════════════════════════════════════════════════════
+function renderConfig(c) {
+  c.innerHTML = `
+    <div class="info-banner">
+      📋 <span>Cole abaixo a URL gerada pelo Google Apps Script. Veja o arquivo <b>codigo_gs.js</b> para o código a ser implantado no Google Sheets.</span>
+    </div>
+
+    <div class="card" style="max-width:600px;">
+      <div class="card-header"><h3>Conexão com Google Sheets</h3></div>
+      <div class="card-body">
+        <div class="field required">
+          <label>URL do Web App (Apps Script)</label>
+          <input type="url" id="cfg-url" placeholder="https://script.google.com/macros/s/AK.../exec" value="${config.gsUrl || ''}">
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button class="btn primary" onclick="salvarConfig()">Salvar e Conectar</button>
+          <button class="btn" onclick="testarConexao()">Testar conexão</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="max-width:600px;">
+      <div class="card-header"><h3>Instruções de Instalação</h3></div>
+      <div class="card-body">
+        <ol style="line-height:2.2;font-size:13px;color:var(--text2);padding-left:18px;">
+          <li>Abra o <b>Google Sheets</b> e crie uma planilha nova</li>
+          <li>Vá em <b>Extensões → Apps Script</b></li>
+          <li>Apague o conteúdo existente e cole o código do arquivo <b>codigo_gs.js</b></li>
+          <li>Clique em <b>Salvar</b> (ícone de disquete)</li>
+          <li>Clique em <b>Implantar → Nova implantação</b></li>
+          <li>Tipo: <b>App da Web</b> · Executar como: <b>Eu mesmo</b> · Acesso: <b>Qualquer pessoa</b></li>
+          <li>Clique em <b>Implantar</b> e autorize as permissões solicitadas</li>
+          <li>Copie a URL gerada e cole no campo acima</li>
+        </ol>
+        <div style="margin-top:16px;padding:12px;background:var(--bg);border-radius:var(--radius-sm);font-size:12px;color:var(--text3);">
+          Após configurar, clique em <b>Sincronizar</b> no topo para carregar os dados da planilha.
+        </div>
+      </div>
+    </div>
+
+    <div class="card" style="max-width:600px;">
+      <div class="card-header"><h3>Dados em Cache Local</h3></div>
+      <div class="card-body">
+        <p style="font-size:13px;color:var(--text2);margin-bottom:14px;">
+          O sistema mantém uma cópia local dos dados para uso offline. A sincronização com o Sheets ocorre manualmente ou após cada operação.
+        </p>
+        <p style="font-size:13px;color:var(--text2);margin-bottom:14px;">
+          <b>Funcionários no cache:</b> ${cache.funcionarios.length} &nbsp;|&nbsp; <b>Lançamentos:</b> ${cache.lancamentos.length}
+        </p>
+        <button class="btn danger-btn btn-sm" onclick="limparCache()">Limpar cache local</button>
+      </div>
+    </div>
+  `;
+}
+
+async function salvarConfig() {
+  const url = document.getElementById('cfg-url').value.trim();
+  if (!url) { showToast('Informe a URL do Apps Script', 'err'); return; }
+  config.gsUrl = url;
+  saveConfig();
+  showToast('Configuração salva!', 'ok');
+  await syncAll();
+}
+
+async function testarConexao() {
+  try {
+    const r = await gsCall('ping');
+    showToast('✓ Conexão OK: ' + (r.msg || 'OK'), 'ok');
+    updateGSStatus(true);
+  } catch(e) {
+    showToast('Erro: ' + e.message, 'err');
+    updateGSStatus(false);
+  }
+}
+
+function limparCache() {
+  if (!confirm('Limpar todos os dados do cache local? Os dados no Sheets não serão afetados.')) return;
+  cache = { funcionarios: [], lancamentos: [] };
+  saveCache();
+  showToast('Cache limpo.', 'ok');
+  render('config');
+}
+
+// ═══════════════════════════════════════════════════════
+//  FUNCIONÁRIOS
+// ═══════════════════════════════════════════════════════
+function renderFuncionarios(c) {
+  c.innerHTML = `
+    <div class="search-row">
+      <input class="search-input" id="busca-func" type="text" placeholder="🔍  Buscar por nome, CPF ou cargo...">
+      <select id="filtro-situacao" style="padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);font-size:13px;font-family:'DM Sans',sans-serif;">
+        <option value="todos">Todos</option>
+        <option value="ativos" selected>Ativos</option>
+        <option value="inativos">Inativos</option>
+      </select>
+      <button class="btn primary" onclick="modalFuncionario()">+ Novo Funcionário</button>
+    </div>
+
+    <div class="card">
+      <div class="card-body no-pad">
+        <div class="table-wrap">
+          <table id="tabela-func">
+            <thead>
+              <tr>
+                <th>Funcionário</th>
+                <th>CPF</th>
+                <th>Cargo</th>
+                <th>Admissão</th>
+                <th>Salário Base</th>
+                <th>Status</th>
+                <th style="width:100px;"></th>
+              </tr>
+            </thead>
+            <tbody id="tbody-func"></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  `;
+  renderFuncTabela('');
+  document.getElementById('busca-func').addEventListener('input', e => renderFuncTabela(e.target.value));
+  document.getElementById('filtro-situacao').addEventListener('change', () => renderFuncTabela(document.getElementById('busca-func').value));
+}
+
+function renderFuncTabela(busca) {
+  const b = busca.toLowerCase();
+  const situacao = document.getElementById('filtro-situacao')?.value || 'todos';
+  const lista = cache.funcionarios.filter(f => {
+    const ativo = !f.dataDemissao || f.dataDemissao === '';
+    const matchSituacao = situacao === 'todos' || (situacao === 'ativos' && ativo) || (situacao === 'inativos' && !ativo);
+    const matchBusca = !b || f.nome.toLowerCase().includes(b) || (f.cpf||'').includes(b) || (f.cargo||'').toLowerCase().includes(b);
+    return matchSituacao && matchBusca;
+  });
+  const tbody = document.getElementById('tbody-func');
+  if (!tbody) return;
+  if (!lista.length) {
+    tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><div class="icon">👥</div><h4>Nenhum resultado</h4><p>Tente outro termo ou cadastre um funcionário.</p></div></td></tr>`;
+    return;
+  }
+  tbody.innerHTML = lista.map(f => {
+    const ativo = !f.dataDemissao || f.dataDemissao === '';
+    return `
+    <tr style="${!ativo ? 'opacity:0.65;' : ''}">
+      <td>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div class="avatar" style="width:30px;height:30px;font-size:11px;${!ativo ? 'background:var(--surface2);color:var(--text3);' : ''}">${initials(f.nome)}</div>
+          <div>
+            <div style="font-weight:500;">${f.nome}</div>
+            <div style="font-size:11px;color:var(--text3);">${f.email || ''}</div>
+          </div>
+        </div>
+      </td>
+      <td style="font-family:'DM Mono',monospace;font-size:12px;">${f.cpf || '—'}</td>
+      <td>${f.cargo || '—'}</td>
+      <td style="font-family:'DM Mono',monospace;font-size:12px;">${fmtDate(f.dataAdmissao)}</td>
+      <td style="font-family:'DM Mono',monospace;font-size:13px;font-weight:500;">${fmt(f.salario)}</td>
+      <td><span class="badge ${ativo ? 'badge-green' : 'badge-red'}">${ativo ? 'Ativo' : 'Inativo'}</span></td>
+      <td>
+        <div style="display:flex;gap:4px;">
+          <button class="btn btn-xs" onclick="modalFuncionario('${f.id}')">Editar</button>
+          <button class="btn btn-xs ${ativo ? 'inativar-btn' : 'ativar-btn'}" onclick="toggleStatusFuncionario('${f.id}')">${ativo ? 'Inativar' : 'Ativar'}</button>
+          <button class="btn btn-xs danger-btn" onclick="excluirFuncionario('${f.id}')">Excluir</button>
+        </div>
+      </td>
+    </tr>
+  `}).join('');
+}
+
+// ═══════════════════════════════════════════════════════
+//  MÁSCARAS DE INPUT
+// ═══════════════════════════════════════════════════════
+function maskCurrency(v) {
+  // Strip everything except digits
+  let digits = String(v === undefined || v === null ? '' : v).replace(/\D/g, '');
+  if (!digits) return '';
+  // Pad to at least 3 digits so we always have centavos
+  digits = digits.replace(/^0+/, '') || '0';
+  // last 2 digits = cents
+  const cents = digits.slice(-2).padStart(2, '0');
+  const reais  = digits.slice(0, -2) || '0';
+  // thousands separator
+  const reaisFormatted = reais.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  return `R$ ${reaisFormatted},${cents}`;
+}
+
+function parseCurrency(v) {
+  // Convert "R$ 1.234,56" → 1234.56 (number)
+  return parseFloat(String(v).replace(/[R$\s.]/g, '').replace(',', '.')) || 0;
+}
+
+function applyMaskCurrency(inputId) {
+  const el = document.getElementById(inputId);
+  if (!el) return;
+  el.addEventListener('input', function() {
+    const raw = this.value.replace(/\D/g, '');
+    if (!raw) { this.value = ''; return; }
+    this.value = maskCurrency(raw);
+    const len = this.value.length;
+    this.setSelectionRange(len, len);
+  });
+}
+
+// Versão inline para usar no oninput= de templates gerados dinamicamente
+function applyMaskCurrencyInline(el) {
+  const raw = el.value.replace(/\D/g, '');
+  if (!raw) { el.value = ''; return; }
+  el.value = maskCurrency(raw);
+  const len = el.value.length;
+  el.setSelectionRange(len, len);
+}
+
+function maskCPF(v) {
+  v = v.replace(/\D/g, '').slice(0, 11);
+  if (v.length <= 3)  return v;
+  if (v.length <= 6)  return v.replace(/(\d{3})(\d+)/, '$1.$2');
+  if (v.length <= 9)  return v.replace(/(\d{3})(\d{3})(\d+)/, '$1.$2.$3');
+  return v.replace(/(\d{3})(\d{3})(\d{3})(\d{1,2})/, '$1.$2.$3-$4');
+}
+
+function maskPhone(v) {
+  v = v.replace(/\D/g, '').slice(0, 11);
+  if (v.length === 0) return v;
+  if (v.length <= 2)  return `(${v}`;
+  if (v.length <= 6)  return `(${v.slice(0,2)}) ${v.slice(2)}`;
+  if (v.length <= 10) return `(${v.slice(0,2)}) ${v.slice(2,6)}-${v.slice(6)}`;
+  // 11 dígitos: celular com 9
+  return `(${v.slice(0,2)}) ${v.slice(2,7)}-${v.slice(7)}`;
+}
+
+function maskCEP(v) {
+  v = v.replace(/\D/g, '').slice(0, 8);
+  if (v.length <= 5) return v;
+  return `${v.slice(0,5)}-${v.slice(5)}`;
+}
+
+function applyMask(inputId, maskFn) {
+  const el = document.getElementById(inputId);
+  if (!el) return;
+  // set current value masked
+  el.value = maskFn(el.value);
+  el.addEventListener('input', function() {
+    const pos = this.selectionStart;
+    const prev = this.value;
+    this.value = maskFn(this.value);
+    // adjust cursor: count digits typed before old cursor, find same digit count in new string
+    const digitsBeforeCursor = prev.slice(0, pos).replace(/\D/g, '').length;
+    let count = 0, newPos = 0;
+    for (let i = 0; i < this.value.length; i++) {
+      if (/\d/.test(this.value[i])) count++;
+      if (count === digitsBeforeCursor) { newPos = i + 1; break; }
+    }
+    this.setSelectionRange(newPos, newPos);
+  });
+}
+
+function initFuncionarioMasks() {
+  applyMask('f-cpf', maskCPF);
+  applyMask('f-tel', maskPhone);
+  applyMask('f-end-cep', maskCEP);
+  applyMaskCurrency('f-salario');
+}
+
+function modalFuncionario(id) {
+  const f = id ? cache.funcionarios.find(x => x.id === id) : null;
+  const modal = openModal(`
+    <div class="modal">
+      <div class="modal-header">
+        <h3>${f ? 'Editar Funcionário' : 'Novo Funcionário'}</h3>
+        <button class="btn btn-icon" onclick="closeModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="tabs">
+          <div class="tab active" onclick="switchTab(this,'tp')">Pessoal</div>
+          <div class="tab" onclick="switchTab(this,'tp2')">Profissional</div>
+          <div class="tab" onclick="switchTab(this,'tp3')">Bancário</div>
+        </div>
+
+        <div id="tp">
+          <div class="grid-2">
+            <div class="field required"><label>Nome completo</label><input id="f-nome" value="${f ? esc(f.nome) : ''}" placeholder="Nome Sobrenome"></div>
+            <div class="field required"><label>CPF</label><input id="f-cpf" value="${f ? esc(f.cpf) : ''}" placeholder="000.000.000-00"></div>
+          </div>
+          <div class="grid-2">
+            <div class="field"><label>Endereço (Rua / Av.)</label><input id="f-end-rua" value="${f ? esc((f.endereco||'').split('|')[0]||'') : ''}" placeholder="Ex: Rua das Flores"></div>
+            <div class="field"><label>Número</label><input id="f-end-num" value="${f ? esc((f.endereco||'').split('|')[1]||'') : ''}" placeholder="Ex: 123"></div>
+          </div>
+          <div class="grid-2">
+            <div class="field"><label>Bairro</label><input id="f-end-bairro" value="${f ? esc((f.endereco||'').split('|')[2]||'') : ''}" placeholder="Ex: Centro"></div>
+            <div class="field"><label>CEP</label><input id="f-end-cep" value="${f ? esc((f.endereco||'').split('|')[3]||'') : ''}" placeholder="00000-000" maxlength="9"></div>
+          </div>
+          <div class="grid-2">
+            <div class="field"><label>Cidade</label><input id="f-end-cidade" value="${f ? esc((f.endereco||'').split('|')[4]||'') : ''}" placeholder="Ex: Porto Alegre"></div>
+            <div class="field"><label>Estado</label>
+              <select id="f-end-estado">
+                ${['','AC','AL','AP','AM','BA','CE','DF','ES','GO','MA','MT','MS','MG','PA','PB','PR','PE','PI','RJ','RN','RS','RO','RR','SC','SP','SE','TO'].map(uf => `<option value="${uf}" ${(f && (f.endereco||'').split('|')[5]===uf)?'selected':''}>${uf||'Selecione...'}</option>`).join('')}
+              </select>
+            </div>
+          </div>
+          <div class="grid-2">
+            <div class="field"><label>Telefone</label><input id="f-tel" value="${f ? esc(f.telefone||'') : ''}" placeholder="(51) 9 9999-9999"></div>
+            <div class="field"><label>E-mail</label><input id="f-email" type="email" value="${f ? esc(f.email||'') : ''}" placeholder="nome@empresa.com"></div>
+          </div>
+        </div>
+
+        <div id="tp2" style="display:none;">
+          <div class="grid-2">
+            <div class="field required"><label>Cargo</label><input id="f-cargo" value="${f ? esc(f.cargo||'') : ''}" placeholder="Ex: Analista, Gerente..."></div>
+            <div class="field required"><label>Salário Base (R$)</label><input id="f-salario" type="text" inputmode="numeric" value="${f ? maskCurrency(f.salario) : ''}" placeholder="R$ 0,00"></div>
+          </div>
+          <div class="grid-2">
+            <div class="field"><label>Data de admissão</label><input id="f-adm" type="date" value="${f ? f.dataAdmissao||'' : ''}"></div>
+            <div class="field"><label>Data de demissão</label><input id="f-dem" type="date" value="${f ? f.dataDemissao||'' : ''}"></div>
+          </div>
+          <div class="grid-2">
+            <div class="field"><label>PIS/PASEP</label><input id="f-pis" value="${f ? esc(f.pis||'') : ''}" placeholder="000.00000.00-0"></div>
+            <div class="field"><label>Número CTPS</label><input id="f-ctps" value="${f ? esc(f.ctps||'') : ''}" placeholder="Número / Série / UF"></div>
+          </div>
+        </div>
+
+        <div id="tp3" style="display:none;">
+          <div class="grid-2">
+            <div class="field"><label>Banco</label><input id="f-banco" value="${f ? esc(f.banco||'') : ''}" placeholder="Ex: Itaú, Bradesco, Nubank..."></div>
+            <div class="field"><label>Agência</label><input id="f-agencia" value="${f ? esc(f.agencia||'') : ''}" placeholder="0000-0"></div>
+          </div>
+          <div class="grid-3">
+            <div class="field"><label>Conta</label><input id="f-conta" value="${f ? esc(f.conta||'') : ''}" placeholder="00000-0"></div>
+            <div class="field"><label>Tipo</label>
+              <select id="f-tipo-conta">
+                <option value="corrente" ${(!f||f.tipoConta==='corrente')?'selected':''}>Corrente</option>
+                <option value="poupanca" ${f&&f.tipoConta==='poupanca'?'selected':''}>Poupança</option>
+              </select>
+            </div>
+            <div class="field"><label>Chave PIX</label><input id="f-pix" value="${f ? esc(f.pix||'') : ''}" placeholder="CPF / e-mail / tel"></div>
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" onclick="closeModal()">Cancelar</button>
+        <button class="btn primary" onclick="salvarFuncionarioLocal('${id||''}')">
+          ${f ? 'Salvar alterações' : 'Cadastrar funcionário'}
+        </button>
+      </div>
+    </div>
+  `);
+  initFuncionarioMasks();
+}
+
+function switchTab(el, targetId) {
+  el.closest('.modal-body').querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  el.classList.add('active');
+  ['tp','tp2','tp3'].forEach(id => {
+    const el2 = document.getElementById(id);
+    if (el2) el2.style.display = id === targetId ? 'block' : 'none';
+  });
+}
+
+async function salvarFuncionarioLocal(id) {
+  const nome   = (document.getElementById('f-nome')?.value || '').trim();
+  const cpf    = (document.getElementById('f-cpf')?.value  || '').trim();
+  const cargo  = (document.getElementById('f-cargo')?.value || '').trim();
+  const salario = parseCurrency(document.getElementById('f-salario')?.value || '');
+  if (!nome || !cpf) { showToast('Nome e CPF são obrigatórios', 'err'); return; }
+
+  const obj = {
+    id:           id || '',
+    nome, cpf, cargo, salario,
+    endereco:     [
+                    document.getElementById('f-end-rua')?.value    || '',
+                    document.getElementById('f-end-num')?.value    || '',
+                    document.getElementById('f-end-bairro')?.value || '',
+                    document.getElementById('f-end-cep')?.value    || '',
+                    document.getElementById('f-end-cidade')?.value || '',
+                    document.getElementById('f-end-estado')?.value || '',
+                  ].join('|'),
+    telefone:     document.getElementById('f-tel')?.value       || '',
+    email:        document.getElementById('f-email')?.value     || '',
+    dataAdmissao: document.getElementById('f-adm')?.value       || '',
+    dataDemissao: document.getElementById('f-dem')?.value       || '',
+    pis:          document.getElementById('f-pis')?.value       || '',
+    ctps:         document.getElementById('f-ctps')?.value      || '',
+    banco:        document.getElementById('f-banco')?.value     || '',
+    agencia:      document.getElementById('f-agencia')?.value   || '',
+    conta:        document.getElementById('f-conta')?.value     || '',
+    tipoConta:    document.getElementById('f-tipo-conta')?.value || 'corrente',
+    pix:          document.getElementById('f-pix')?.value       || '',
+  };
+
+  if (config.gsUrl) {
+    try {
+      const r = await saveFuncionario(obj);
+      if (!id) obj.id = r.id; // usa o id gerado pelo Sheets
+      showToast('Funcionário salvo no Sheets!', 'ok');
+    } catch(e) {
+      showToast('Erro ao salvar no Sheets: ' + e.message, 'err');
+      return;
+    }
+  } else {
+    if (!id) obj.id = uid(); // fallback local
+    showToast('Salvo localmente (Sheets não configurado)', 'ok');
+  }
+
+  if (id) {
+    const idx = cache.funcionarios.findIndex(x => x.id === id);
+    if (idx >= 0) cache.funcionarios[idx] = obj;
+    else cache.funcionarios.push(obj);
+  } else {
+    cache.funcionarios.push(obj);
+  }
+  saveCache();
+  closeModal();
+  renderFuncTabela(document.getElementById('busca-func')?.value || '');
+}
+
+async function toggleStatusFuncionario(id) {
+  const f = cache.funcionarios.find(x => x.id === id);
+  if (!f) return;
+  const ativo = !f.dataDemissao || f.dataDemissao === '';
+  if (ativo) {
+    // Inativar: pede confirmação e define data de demissão como hoje
+    if (!confirm(`Inativar "${f.nome}"? Isso marcará a data de demissão como hoje.`)) return;
+    f.dataDemissao = new Date().toISOString().slice(0, 10);
+  } else {
+    // Reativar: limpa a data de demissão
+    if (!confirm(`Reativar "${f.nome}"? A data de demissão será removida.`)) return;
+    f.dataDemissao = '';
+  }
+  if (config.gsUrl) {
+    try {
+      await saveFuncionario(f);
+    } catch(e) {
+      showToast('Erro ao atualizar no Sheets: ' + e.message, 'err'); return;
+    }
+  }
+  saveCache();
+  renderFuncTabela(document.getElementById('busca-func')?.value || '');
+  showToast(ativo ? `"${f.nome}" inativado.` : `"${f.nome}" reativado.`, 'ok');
+}
+
+async function excluirFuncionario(id) {
+  if (!confirm('Excluir este funcionário e todos seus lançamentos?')) return;
+  if (config.gsUrl) {
+    try {
+      await deleteFuncionario(id);
+    } catch(e) {
+      showToast('Erro: ' + e.message, 'err'); return;
+    }
+  }
+  cache.funcionarios = cache.funcionarios.filter(f => f.id !== id);
+  cache.lancamentos  = cache.lancamentos.filter(l => l.funcionarioId !== id);
+  saveCache();
+  renderFuncTabela(document.getElementById('busca-func')?.value || '');
+  showToast('Funcionário excluído.', 'ok');
+}
+
+// ═══════════════════════════════════════════════════════
+//  LANÇAMENTOS
+// ═══════════════════════════════════════════════════════
+// ── TIPOS DE LANÇAMENTO ──
+const TIPOS_ENTRADA = [
+  'Bônus Viagem',
+  'Insalubridade',
+  'Décimo 1ª Parcela',
+  'Décimo 2ª Parcela',
+  'Hora Extra',
+  'Vale Combustível (E)',
+  'Comissão / Bônus',
+];
+
+const TIPOS_SAIDA = [
+  'Adiantamento',
+  'Vale Transporte',
+  'Vale Refeição',
+  'Empréstimo',
+  'Sindicato',
+  'Vale Combustível (S)',
+  'IR',
+  'INSS',
+  'Falta',
+];
+
+const TIPOS_LANC = [...TIPOS_ENTRADA, ...TIPOS_SAIDA];
+
+function badgeClass(tipo) {
+  if (TIPOS_ENTRADA.includes(tipo)) return 'badge-green';
+  if (TIPOS_SAIDA.includes(tipo))  return 'badge-red';
+  // legado
+  const m = {
+    'INSS':'badge-blue','IR':'badge-amber','Adiantamento':'badge-green','Falta':'badge-red',
+    'Hora Extra':'badge-green','Desconto':'badge-red','Plano de Saúde':'badge-blue',
+    'VT':'badge-amber','VA':'badge-amber','Atestado':'badge-amber'
+  };
+  return m[tipo] || 'badge-gray';
+}
+
+function isEntrada(tipo) { return TIPOS_ENTRADA.includes(tipo); }
+function isSaida(tipo)   { return TIPOS_SAIDA.includes(tipo); }
+
+function renderLancamentos(c) {
+  const mesAtual = new Date().toISOString().slice(0, 7);
+  c.innerHTML = `
+    <div style="display:flex;gap:10px;margin-bottom:20px;align-items:center;flex-wrap:wrap;">
+      <div style="display:flex;align-items:center;gap:8px;">
+        <label style="font-size:13px;color:var(--text2);font-weight:500;">Mês:</label>
+        <input type="month" id="sel-mes" value="${mesAtual}" style="padding:7px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);font-family:'DM Mono',monospace;font-size:13px;" onchange="renderLancArea()">
+      </div>
+      <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:200px;">
+        <label style="font-size:13px;color:var(--text2);font-weight:500;">Funcionário:</label>
+        <select id="sel-func-lanc" style="flex:1;padding:7px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);font-size:13px;font-family:'DM Sans',sans-serif;" onchange="renderLancArea()">
+          <option value="">Todos</option>
+          ${cache.funcionarios.map(f => `<option value="${f.id}">${f.nome}</option>`).join('')}
+        </select>
+      </div>
+      <button class="btn" onclick="modalCopiarTodos()" title="Copiar todos os lançamentos do mês para outra competência">⎘ Copiar mês</button>
+      <button class="btn primary" onclick="modalLancamento()">+ Novo Lançamento</button>
+    </div>
+    <div id="area-lanc"></div>
+  `;
+  renderLancArea();
+}
+
+function renderLancArea() {
+  const mes    = document.getElementById('sel-mes')?.value;
+  const funcId = document.getElementById('sel-func-lanc')?.value;
+  const area   = document.getElementById('area-lanc');
+  if (!area || !mes) return;
+
+  let lancs = cache.lancamentos.filter(l => (l.competencia || l.mes) === mes);
+  if (funcId) lancs = lancs.filter(l => l.funcionarioId === funcId);
+
+  if (!lancs.length) {
+    area.innerHTML = `<div class="card"><div class="card-body"><div class="empty-state"><div class="icon">📋</div><h4>Nenhum lançamento em ${mes}</h4><p>Clique em "+ Novo Lançamento" para registrar.</p></div></div></div>`;
+    return;
+  }
+
+  // Agrupar por funcionário
+  const grupos = {};
+  lancs.forEach(l => {
+    if (!grupos[l.funcionarioId]) grupos[l.funcionarioId] = [];
+    grupos[l.funcionarioId].push(l);
+  });
+
+  area.innerHTML = Object.entries(grupos).map(([fid, ls]) => {
+    const f = cache.funcionarios.find(x => x.id === fid);
+    return `
+      <div class="card">
+        <div class="card-header">
+          <div style="display:flex;align-items:center;gap:10px;">
+            <div class="avatar">${initials(f ? f.nome : '?')}</div>
+            <div>
+              <div style="font-weight:600;">${f ? f.nome : 'Funcionário não encontrado'}</div>
+              <div style="font-size:11px;color:var(--text3);">${f ? f.cargo || '' : ''}</div>
+            </div>
+          </div>
+          <div style="display:flex;gap:6px;">
+            <button class="btn btn-sm" onclick="modalCopiarFuncionario('${fid}','${mes}')" title="Copiar lançamentos deste funcionário para outra competência">⎘ Copiar</button>
+            <button class="btn btn-sm" onclick="modalLancamento('','${fid}')">+ Adicionar</button>
+          </div>
+        </div>
+        <div class="card-body no-pad">
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Categoria</th><th>Tipo</th><th>Data Lançamento</th><th>Competência</th><th>Valor</th><th>Detalhes</th><th>Observação</th><th>Anexo</th><th></th></tr></thead>
+              <tbody>
+                ${ls.map(l => {
+                  const entrada = isEntrada(l.tipo);
+                  const saida   = isSaida(l.tipo);
+                  const catBadge = entrada
+                    ? `<span class="badge badge-green">↑ Entrada</span>`
+                    : saida
+                      ? `<span class="badge badge-red">↓ Saída</span>`
+                      : `<span class="badge badge-gray">—</span>`;
+                  let valorCell = '—';
+                  if (l.valor) valorCell = fmt(l.valor);
+                  else if (l.quantidade) valorCell = l.quantidade + ' ' + (l.unidade||'');
+                  let detCell = '—';
+                  if (l.tipo === 'Hora Extra' && l.qtdHoras) detCell = `${l.qtdHoras}h × ${fmt(l.valorHora)}`;
+                  else if (l.tipo === 'Vale Refeição' && l.diasVR) detCell = `${l.diasVR}d × ${fmt(l.valorDiaVR)}`;
+                  else if (l.tipo === 'Empréstimo' && l.totalEmprestimo) detCell = `Parcela ${l.parcelaAtual||'?'}/${l.totalParcelas} · Total ${fmt(l.totalEmprestimo)}`;
+                  else if (l.tipo === 'Falta' && l.qtdFaltas) detCell = `${l.qtdFaltas} dia(s)`;
+                  return `
+                  <tr>
+                    <td>${catBadge}</td>
+                    <td><span class="badge ${badgeClass(l.tipo)}">${l.tipo}</span></td>
+                    <td style="font-family:'DM Mono',monospace;font-size:12px;">${l.dataLancamento ? fmtDate(l.dataLancamento) : '—'}</td>
+                    <td style="font-family:'DM Mono',monospace;font-size:12px;">${l.competencia || l.mes || '—'}</td>
+                    <td style="font-family:'DM Mono',monospace;">${valorCell}</td>
+                    <td style="font-size:12px;color:var(--text2);">${detCell}</td>
+                    <td style="color:var(--text2);font-size:12px;max-width:160px;">${l.obs || '—'}</td>
+                    <td>${l.anexoNome ? `<button class="btn btn-xs" style="color:var(--accent);border-color:var(--accent-light);background:var(--accent-light);" onclick="abrirAnexo('${l.id}')" title="Baixar ${esc(l.anexoNome)}">📎 ${esc(l.anexoNome)}</button>` : '—'}</td>
+                    <td style="display:flex;gap:4px;">
+                      <button class="btn btn-xs" onclick="modalEditarLancamento('${l.id}')">✏️ Editar</button>
+                      <button class="btn btn-xs danger-btn" onclick="excluirLancamento('${l.id}')">Excluir</button>
+                    </td>
+                  </tr>
+                `}).join('')}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+// ───── COPIAR LANÇAMENTOS ─────
+
+function _proximoMes(mes) {
+  const [y, m] = mes.split('-').map(Number);
+  return m === 12 ? `${y+1}-01` : `${y}-${String(m+1).padStart(2,'0')}`;
+}
+
+function _buildModalCopiar(titulo, lancamentos, mesOrigem) {
+  const mesDestino = _proximoMes(mesOrigem);
+  const hoje = new Date().toISOString().slice(0,10);
+
+  const linhas = lancamentos.map(l => {
+    const f = cache.funcionarios.find(x => x.id === l.funcionarioId);
+    const descVal = l.valor ? fmt(l.valor) : (l.quantidade ? `${l.quantidade} ${l.unidade||''}` : '—');
+    return `
+      <tr style="vertical-align:middle;">
+        <td style="width:36px;text-align:center;padding:10px 8px;">
+          <input type="checkbox" checked data-id="${l.id}"
+            style="width:15px;height:15px;cursor:pointer;accent-color:var(--accent);">
+        </td>
+        <td style="padding:10px 8px;">
+          <span class="badge ${badgeClass(l.tipo)}">${l.tipo}</span>
+        </td>
+        ${f ? `<td style="padding:10px 8px;font-size:12px;color:var(--text2);">${f.nome}</td>` : ''}
+        <td style="padding:10px 8px;font-family:'DM Mono',monospace;font-size:12px;">${descVal}</td>
+        <td style="padding:10px 8px;font-size:12px;color:var(--text3);max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${l.obs || '—'}</td>
+      </tr>`;
+  }).join('');
+
+  const colFunc = lancamentos.some(l => cache.funcionarios.find(x => x.id === l.funcionarioId));
+
+  return `
+    <div class="modal" style="width:680px;">
+      <div class="modal-header">
+        <h3>⎘ ${titulo}</h3>
+        <button class="btn btn-icon" onclick="closeModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="info-banner" style="margin-bottom:16px;">
+          📋 <span>Selecione os lançamentos que deseja copiar e defina a nova competência e data.</span>
+        </div>
+
+        <div class="grid-2" style="margin-bottom:18px;">
+          <div class="field required">
+            <label>Nova Competência (mês destino)</label>
+            <input id="copy-competencia" type="month" value="${mesDestino}">
+          </div>
+          <div class="field required">
+            <label>Data do lançamento no destino</label>
+            <input id="copy-data" type="date" value="${hoje}">
+          </div>
+        </div>
+
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
+          <span style="font-size:12px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:0.05em;">
+            Lançamentos — ${lancamentos.length} item(s)
+          </span>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-xs" onclick="toggleChecksCopiar(true)">Marcar todos</button>
+            <button class="btn btn-xs" onclick="toggleChecksCopiar(false)">Desmarcar todos</button>
+          </div>
+        </div>
+
+        <div style="border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;max-height:300px;overflow-y:auto;">
+          <table style="width:100%;border-collapse:collapse;">
+            <thead>
+              <tr style="background:var(--bg);">
+                <th style="padding:8px;width:36px;"></th>
+                <th style="padding:8px 8px;text-align:left;font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;">Tipo</th>
+                ${colFunc ? '<th style="padding:8px 8px;text-align:left;font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;">Funcionário</th>' : ''}
+                <th style="padding:8px 8px;text-align:left;font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;">Valor / Qtd</th>
+                <th style="padding:8px 8px;text-align:left;font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;">Observação</th>
+              </tr>
+            </thead>
+            <tbody id="copy-tbody">
+              ${linhas}
+            </tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" onclick="closeModal()">Cancelar</button>
+        <button class="btn primary" onclick="executarCopia(${JSON.stringify(lancamentos.map(l=>l.id))})">⎘ Copiar selecionados</button>
+      </div>
+    </div>`;
+}
+
+window.toggleChecksCopiar = function(val) {
+  document.querySelectorAll('#copy-tbody input[type=checkbox]').forEach(cb => cb.checked = val);
+};
+
+function modalCopiarFuncionario(funcId, mes) {
+  const lancs = cache.lancamentos.filter(l => l.funcionarioId === funcId && (l.competencia || l.mes) === mes);
+  if (!lancs.length) { showToast('Nenhum lançamento para copiar.', 'err'); return; }
+  const f = cache.funcionarios.find(x => x.id === funcId);
+  openModal(_buildModalCopiar(`Copiar lançamentos — ${f ? f.nome : ''}`, lancs, mes));
+}
+
+function modalCopiarTodos() {
+  const mes = document.getElementById('sel-mes')?.value;
+  const funcId = document.getElementById('sel-func-lanc')?.value;
+  if (!mes) { showToast('Selecione um mês primeiro.', 'err'); return; }
+  let lancs = cache.lancamentos.filter(l => (l.competencia || l.mes) === mes);
+  if (funcId) lancs = lancs.filter(l => l.funcionarioId === funcId);
+  if (!lancs.length) { showToast('Nenhum lançamento para copiar.', 'err'); return; }
+  openModal(_buildModalCopiar(`Copiar todos os lançamentos de ${mes}`, lancs, mes));
+}
+
+async function executarCopia(todosIds) {
+  const competencia = document.getElementById('copy-competencia')?.value;
+  const dataLanc    = document.getElementById('copy-data')?.value;
+  if (!competencia || !dataLanc) { showToast('Preencha competência e data.', 'err'); return; }
+
+  const selecionados = todosIds.filter(id => {
+    const cb = document.querySelector(`#copy-tbody input[data-id="${id}"]`);
+    return cb && cb.checked;
+  });
+  if (!selecionados.length) { showToast('Nenhum lançamento selecionado.', 'err'); return; }
+
+  let copiados = 0;
+  for (const id of selecionados) {
+    const orig = cache.lancamentos.find(l => l.id === id);
+    if (!orig) continue;
+    const novo = {
+      ...orig,
+      id:             uid(),
+      mes:            competencia,
+      competencia:    competencia,
+      dataLancamento: dataLanc,
+    };
+    if (config.gsUrl) {
+      try { await saveLancamento(novo); } catch(e) { /* continua */ }
+    }
+    cache.lancamentos.push(novo);
+    copiados++;
+  }
+
+  saveCache();
+  closeModal();
+  // Navega para a competência copiada
+  const selMes = document.getElementById('sel-mes');
+  if (selMes) { selMes.value = competencia; }
+  renderLancArea();
+  showToast(`✓ ${copiados} lançamento(s) copiado(s) para ${competencia}`, 'ok');
+}
+
+function modalLancamento(id, preFuncId, lancamentoExistente) {
+  const mes = document.getElementById('sel-mes')?.value || new Date().toISOString().slice(0, 7);
+  const funcOptions = cache.funcionarios
+    .filter(f => !f.dataDemissao || f.dataDemissao === '')
+    .map(f => `<option value="${f.id}" ${f.id === (preFuncId || (lancamentoExistente && lancamentoExistente.funcionarioId)) ? 'selected' : ''}>${f.nome}</option>`)
+    .join('');
+
+  if (!funcOptions) { showToast('Cadastre funcionários primeiro.', 'err'); return; }
+
+  const isEdit = !!lancamentoExistente;
+  const l = lancamentoExistente || {};
+
+  const optsEntrada = TIPOS_ENTRADA.map(t => `<option value="${t}" ${l.tipo===t?'selected':''}>${t}</option>`).join('');
+  const optsSaida   = TIPOS_SAIDA.map(t => `<option value="${t}" ${l.tipo===t?'selected':''}>${t}</option>`).join('');
+
+  // Decide categoria inicial
+  const catInicial = isEdit ? (isEntrada(l.tipo) ? 'entrada' : 'saida') : 'entrada';
+  const tipoInicial = isEdit ? l.tipo : TIPOS_ENTRADA[0];
+
+  openModal(`
+    <div class="modal" style="width:680px;">
+      <div class="modal-header">
+        <h3>${isEdit ? '✏️ Editar Lançamento' : 'Novo Lançamento'} — <span style="font-family:'DM Mono';font-size:13px;">${mes}</span></h3>
+        <button class="btn btn-icon" onclick="closeModal()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="grid-2">
+          <div class="field required">
+            <label>Funcionário</label>
+            <select id="l-func">${funcOptions}</select>
+          </div>
+          <div class="field required">
+            <label>Data do lançamento</label>
+            <input id="l-data-lanc" type="date" value="${l.dataLancamento || new Date().toISOString().slice(0,10)}">
+          </div>
+        </div>
+
+        <div style="margin-bottom:14px;">
+          <label style="display:block;font-size:12px;font-weight:500;color:var(--text2);margin-bottom:8px;">Categoria</label>
+          <div style="display:flex;gap:0;border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;width:fit-content;">
+            <button id="cat-btn-entrada" onclick="switchCategoria('entrada')"
+              style="padding:8px 20px;font-size:13px;font-weight:500;border:none;cursor:pointer;transition:all 0.15s;
+                background:${catInicial==='entrada'?'var(--green)':'var(--surface)'};
+                color:${catInicial==='entrada'?'white':'var(--text2)'};">
+              ↑ Entrada
+            </button>
+            <button id="cat-btn-saida" onclick="switchCategoria('saida')"
+              style="padding:8px 20px;font-size:13px;font-weight:500;border:none;cursor:pointer;transition:all 0.15s;border-left:1px solid var(--border);
+                background:${catInicial==='saida'?'var(--red)':'var(--surface)'};
+                color:${catInicial==='saida'?'white':'var(--text2)'};">
+              ↓ Saída
+            </button>
+          </div>
+        </div>
+
+        <div class="grid-2">
+          <div class="field required">
+            <label>Tipo de lançamento</label>
+            <select id="l-tipo" onchange="onTipoChange(this.value,'${mes}')">
+              <optgroup id="optgroup-entrada" label="↑ Entradas" style="${catInicial==='saida'?'display:none':''}">${optsEntrada}</optgroup>
+              <optgroup id="optgroup-saida"   label="↓ Saídas"   style="${catInicial==='entrada'?'display:none':''}">${optsSaida}</optgroup>
+            </select>
+          </div>
+          <div class="field required">
+            <label>Competência (mês)</label>
+            <input id="l-comp-top" type="month" value="${l.competencia || l.mes || mes}">
+          </div>
+        </div>
+
+        <div id="area-tipo"></div>
+
+        <div class="field"><label>Observação</label><textarea id="l-obs" placeholder="Informações adicionais...">${l.obs || ''}</textarea></div>
+        <div class="field">
+          <label>Documento (atestado, comprovante...)</label>
+          <div class="upload-area ${l.anexoNome ? 'has-file' : ''}" id="upload-area" onclick="document.getElementById('l-file').click()">
+            ${l.anexoNome ? `📎 ${l.anexoNome}` : 'Clique para anexar arquivo (PDF, imagem)'}
+            <input type="file" id="l-file" style="display:none;" accept=".pdf,.jpg,.jpeg,.png,.webp" onchange="onFileChange(this)">
+          </div>
+          <div style="font-size:11px;color:var(--text3);margin-top:4px;">📌 Arquivo salvo no Google Drive (quando conectado ao Sheets). O link é registrado automaticamente.</div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn" onclick="closeModal()">Cancelar</button>
+        <button class="btn primary" onclick="salvarLancamentoLocal('${mes}', '${isEdit ? l.id : ''}')">
+          ${isEdit ? 'Salvar alterações' : 'Salvar lançamento'}
+        </button>
+      </div>
+    </div>
+  `);
+
+  // Init
+  switchCategoria(catInicial);
+  onTipoChange(tipoInicial, mes, l);
+}
+
+window.switchCategoria = function(cat) {
+  const btnE = document.getElementById('cat-btn-entrada');
+  const btnS = document.getElementById('cat-btn-saida');
+  const ogE  = document.getElementById('optgroup-entrada');
+  const ogS  = document.getElementById('optgroup-saida');
+  const sel  = document.getElementById('l-tipo');
+  if (!btnE || !btnS || !ogE || !ogS) return;
+
+  if (cat === 'entrada') {
+    btnE.style.background = 'var(--green)'; btnE.style.color = 'white';
+    btnS.style.background = 'var(--surface)'; btnS.style.color = 'var(--text2)';
+    ogE.style.display = ''; ogS.style.display = 'none';
+    sel.value = TIPOS_ENTRADA[0];
+  } else {
+    btnS.style.background = 'var(--red)'; btnS.style.color = 'white';
+    btnE.style.background = 'var(--surface)'; btnE.style.color = 'var(--text2)';
+    ogS.style.display = ''; ogE.style.display = 'none';
+    sel.value = TIPOS_SAIDA[0];
+  }
+  const mes = document.getElementById('l-comp-top')?.value || new Date().toISOString().slice(0,7);
+  onTipoChange(sel.value, mes);
+};
+
+window.onTipoChange = function(tipo, mes, dadosExistentes) {
+  const area = document.getElementById('area-tipo');
+  if (!area) return;
+  const d = dadosExistentes || {};
+  const funcId = document.getElementById('l-func')?.value;
+  const f = cache.funcionarios.find(x => x.id === funcId);
+  const salBase = Number(f?.salario || 0);
+
+  if (tipo === 'Hora Extra') {
+    const qtd = d.qtdHoras || '';
+    const vh  = d.valorHora || '';
+    const vt  = d.valor || '';
+    area.innerHTML = `
+      <div style="background:var(--green-bg);border:1px solid #a8d5be;border-radius:var(--radius-sm);padding:14px 16px;margin-bottom:14px;">
+        <div style="font-size:11px;font-weight:600;color:var(--green);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.05em;">↑ Hora Extra</div>
+        <div class="grid-3">
+          <div class="field">
+            <label>Qtd de horas</label>
+            <input id="l-qtd-horas" type="number" step="0.5" min="0" placeholder="2" value="${qtd}" oninput="calcHoraExtra()">
+          </div>
+          <div class="field">
+            <label>Valor por hora (R$)</label>
+            <input id="l-valor-hora" type="text" inputmode="numeric" placeholder="R$ 0,00" value="${vh ? maskCurrency(vh) : ''}" oninput="applyMaskCurrencyInline(this);calcHoraExtra()">
+          </div>
+          <div class="field">
+            <label>Valor total calculado</label>
+            <input id="l-valor-he" type="text" inputmode="numeric" readonly placeholder="R$ 0,00" value="${vt ? maskCurrency(vt) : ''}"
+              style="background:var(--surface2);font-weight:600;color:var(--green);">
+          </div>
+        </div>
+      </div>`;
+  } else if (tipo === 'Falta') {
+    area.innerHTML = `
+      <div style="background:var(--red-bg);border:1px solid #e8b4b4;border-radius:var(--radius-sm);padding:14px 16px;margin-bottom:14px;">
+        <div style="font-size:11px;font-weight:600;color:var(--red);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.05em;">↓ Falta</div>
+        <div class="grid-2">
+          <div class="field">
+            <label>Quantidade de dias de falta</label>
+            <input id="l-qtd-faltas" type="number" min="0" step="0.5" placeholder="1" value="${d.qtdFaltas||''}">
+          </div>
+          <div class="field">
+            <label>Valor do desconto (R$)</label>
+            <input id="l-valor" type="text" inputmode="numeric" placeholder="R$ 0,00" value="${d.valor ? maskCurrency(d.valor) : ''}" oninput="applyMaskCurrencyInline(this)">
+          </div>
+        </div>
+      </div>`;
+  } else if (tipo === 'Vale Transporte') {
+    const vt6 = salBase > 0 ? (salBase * 0.06).toFixed(2) : '';
+    area.innerHTML = `
+      <div style="background:var(--red-bg);border:1px solid #e8b4b4;border-radius:var(--radius-sm);padding:14px 16px;margin-bottom:14px;">
+        <div style="font-size:11px;font-weight:600;color:var(--red);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.05em;">↓ Vale Transporte — 6% do Salário Base</div>
+        <div class="grid-2">
+          <div class="field">
+            <label>Salário base do funcionário</label>
+            <input type="text" value="${fmt(salBase)}" readonly style="background:var(--surface2);color:var(--text2);">
+          </div>
+          <div class="field">
+            <label>Valor a descontar (6%)</label>
+            <input id="l-valor" type="text" inputmode="numeric" value="${d.valor ? maskCurrency(d.valor) : (vt6 ? maskCurrency(vt6) : '')}" style="font-weight:600;color:var(--red);" oninput="applyMaskCurrencyInline(this)">
+          </div>
+        </div>
+      </div>`;
+  } else if (tipo === 'Vale Refeição') {
+    const dias   = d.diasVR || '';
+    const vDia   = d.valorDiaVR || '';
+    const total  = d.totalVR || '';
+    const desconto = d.valor || '';
+    const fmtVal = v => v ? maskCurrency(String(Math.round(Number(v) * 100))) : '';
+    area.innerHTML = `
+      <div style="background:var(--red-bg);border:1px solid #e8b4b4;border-radius:var(--radius-sm);padding:14px 16px;margin-bottom:14px;">
+        <div style="font-size:11px;font-weight:600;color:var(--red);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.05em;">↓ Vale Refeição — desconto = 10% do valor pago</div>
+        <div class="grid-4">
+          <div class="field">
+            <label>Dias a pagar</label>
+            <input id="l-dias-vr" type="number" min="0" placeholder="22" value="${dias}" oninput="calcValeRefeicao()">
+          </div>
+          <div class="field">
+            <label>Valor por dia (R$)</label>
+            <input id="l-valor-dia-vr" type="text" inputmode="numeric" placeholder="R$ 0,00" value="${fmtVal(vDia)}" oninput="applyMaskCurrencyInline(this);calcValeRefeicao()">
+          </div>
+          <div class="field">
+            <label>Total a pagar</label>
+            <input id="l-total-vr" type="text" inputmode="numeric" readonly placeholder="R$ 0,00" value="${fmtVal(total)}"
+              style="background:var(--surface2);color:var(--text2);">
+          </div>
+          <div class="field">
+            <label>Desconto funcionário (10%)</label>
+            <input id="l-valor" type="text" inputmode="numeric" readonly placeholder="R$ 0,00" value="${fmtVal(desconto)}"
+              style="background:var(--surface2);font-weight:600;color:var(--red);">
+          </div>
+        </div>
+      </div>`;
+  } else if (tipo === 'Empréstimo') {
+    const totalEmp  = d.totalEmprestimo || '';
+    const totalParc = d.totalParcelas || '';
+    const parcVal   = d.valor || '';
+    area.innerHTML = `
+      <div style="background:var(--red-bg);border:1px solid #e8b4b4;border-radius:var(--radius-sm);padding:14px 16px;margin-bottom:14px;">
+        <div style="font-size:11px;font-weight:600;color:var(--red);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.05em;">↓ Empréstimo</div>
+        <div class="grid-3">
+          <div class="field">
+            <label>Valor total do empréstimo (R$)</label>
+            <input id="l-total-emp" type="text" inputmode="numeric" placeholder="R$ 0,00" value="${totalEmp ? maskCurrency(totalEmp) : ''}" oninput="applyMaskCurrencyInline(this);calcEmprestimo()">
+          </div>
+          <div class="field">
+            <label>Número de parcelas</label>
+            <input id="l-parcelas" type="number" min="1" placeholder="1" value="${totalParc}" oninput="calcEmprestimo()">
+          </div>
+          <div class="field">
+            <label>Valor da parcela (desconto/mês)</label>
+            <input id="l-valor" type="text" inputmode="numeric" readonly placeholder="R$ 0,00" value="${parcVal ? maskCurrency(parcVal) : ''}"
+              style="background:var(--surface2);font-weight:600;color:var(--red);">
+          </div>
+        </div>
+        <div id="emp-aviso" style="font-size:12px;color:var(--text2);margin-top:4px;"></div>
+      </div>`;
+  } else {
+    // Genérico: campos comuns de entrada ou saída
+    const isE = isEntrada(tipo);
+    const bgColor = isE ? 'var(--green-bg)' : 'var(--red-bg)';
+    const borderColor = isE ? '#a8d5be' : '#e8b4b4';
+    const txtColor = isE ? 'var(--green)' : 'var(--red)';
+    const seta = isE ? '↑' : '↓';
+    area.innerHTML = `
+      <div style="background:${bgColor};border:1px solid ${borderColor};border-radius:var(--radius-sm);padding:14px 16px;margin-bottom:14px;">
+        <div style="font-size:11px;font-weight:600;color:${txtColor};margin-bottom:10px;text-transform:uppercase;letter-spacing:0.05em;">${seta} ${tipo}</div>
+        <div class="field">
+          <label>Valor (R$)</label>
+          <input id="l-valor" type="text" inputmode="numeric" placeholder="R$ 0,00" value="${d.valor ? maskCurrency(d.valor) : ''}"
+            style="font-weight:600;color:${txtColor};" oninput="applyMaskCurrencyInline(this)">
+        </div>
+      </div>`;
+  }
+};
+
+// ── CALCULADORAS INLINE ──
+window.onFileChange = function(input) {
+  const area = document.getElementById('upload-area');
+  if (input.files[0]) {
+    const file = input.files[0];
+    const sizeMB = (file.size / 1024 / 1024).toFixed(2);
+    if (file.size > 3 * 1024 * 1024) {
+      area.innerHTML = `⚠️ Arquivo muito grande (${sizeMB} MB). Use arquivos menores que 3 MB.<input type="file" id="l-file" style="display:none;" accept=".pdf,.jpg,.jpeg,.png,.webp" onchange="onFileChange(this)">`;
+      area.classList.remove('has-file');
+      input.value = '';
+      return;
+    }
+    area.innerHTML = `📎 ${file.name} <span style="font-size:11px;opacity:0.7;">(${sizeMB} MB)</span><input type="file" id="l-file" style="display:none;" accept=".pdf,.jpg,.jpeg,.png,.webp" onchange="onFileChange(this)">`;
+    area.classList.add('has-file');
+  }
+};
+
+window.calcHoraExtra = function() {
+  const qtd = parseFloat(document.getElementById('l-qtd-horas')?.value || 0);
+  const vh  = parseCurrency(document.getElementById('l-valor-hora')?.value || '0');
+  const total = qtd * vh;
+  const el = document.getElementById('l-valor-he');
+  if (el) el.value = isNaN(total) || total === 0 ? '' : maskCurrency(String(Math.round(total * 100)));
+};
+
+window.calcValeRefeicao = function() {
+  const dias = parseFloat(document.getElementById('l-dias-vr')?.value || 0);
+  const vDia = parseCurrency(document.getElementById('l-valor-dia-vr')?.value || '0');
+  const total = dias * vDia;
+  const desc  = total * 0.10;
+  const elT = document.getElementById('l-total-vr');
+  const elD = document.getElementById('l-valor');
+  if (elT) elT.value = isNaN(total) || total === 0 ? '' : maskCurrency(String(Math.round(total * 100)));
+  if (elD) elD.value = isNaN(desc)  || desc === 0  ? '' : maskCurrency(String(Math.round(desc  * 100)));
+};
+
+window.calcEmprestimo = function() {
+  const total   = parseCurrency(document.getElementById('l-total-emp')?.value || '0');
+  const parc    = parseInt(document.getElementById('l-parcelas')?.value    || 1);
+  const parcVal = (parc > 0 && total > 0) ? (total / parc) : 0;
+  const el = document.getElementById('l-valor');
+  if (el) el.value = parcVal > 0 ? maskCurrency(String(Math.round(parcVal * 100))) : '';
+
+  const av  = document.getElementById('emp-aviso');
+  const mes = document.getElementById('l-comp-top')?.value || new Date().toISOString().slice(0,7);
+  if (!av) return;
+  if (parc > 1 && parcVal) {
+    let previewRows = '';
+    let m = mes;
+    for (let i = 1; i <= Math.min(parc, 6); i++) {
+      previewRows += `<div style="display:flex;justify-content:space-between;padding:4px 0;border-bottom:1px dashed var(--border);font-size:12px;">
+        <span style="color:var(--text2);">Parcela ${i}/${parc}</span>
+        <span style="font-family:'DM Mono',monospace;color:var(--red);">${m}</span>
+        <span style="font-family:'DM Mono',monospace;font-weight:600;">${maskCurrency(String(Math.round(parcVal * 100)))}</span>
+      </div>`;
+      m = _proximoMes(m);
+    }
+    if (parc > 6) previewRows += `<div style="font-size:11px;color:var(--text3);padding:4px 0;">...e mais ${parc-6} parcela(s)</div>`;
+    av.innerHTML = `
+      <div style="background:var(--amber-bg);border:1px solid #e8d48b;border-radius:var(--radius-sm);padding:12px 14px;margin-top:4px;">
+        <div style="font-size:11px;font-weight:600;color:var(--amber);margin-bottom:8px;text-transform:uppercase;letter-spacing:0.05em;">
+          ✓ Todas as ${parc} parcelas serão lançadas automaticamente
+        </div>
+        ${previewRows}
+      </div>`;
+  } else {
+    av.innerHTML = '';
+  }
+};
+
+// ── EDITAR LANÇAMENTO ──
+window.modalEditarLancamento = function(id) {
+  const l = cache.lancamentos.find(x => x.id === id);
+  if (!l) { showToast('Lançamento não encontrado.', 'err'); return; }
+  const mes = l.competencia || l.mes || new Date().toISOString().slice(0,7);
+  modalLancamento(null, l.funcionarioId, l);
+};
+
+async function salvarLancamentoLocal(mes, editId) {
+  const funcId = document.getElementById('l-func')?.value;
+  const tipo   = document.getElementById('l-tipo')?.value;
+  if (!funcId || !tipo) { showToast('Selecione o funcionário e o tipo', 'err'); return; }
+
+  const fileInput = document.getElementById('l-file');
+  let novoAnexo = null;
+  if (fileInput?.files[0]) {
+    try { novoAnexo = await toBase64(fileInput.files[0]); }
+    catch(e) { showToast('Erro ao ler o arquivo: '+e.message,'err'); return; }
+  }
+
+  // Campos específicos por tipo
+  let valor = parseCurrency(document.getElementById('l-valor')?.value || document.getElementById('l-valor-he')?.value || '0') || '';
+  const qtdHoras       = document.getElementById('l-qtd-horas')?.value || '';
+  const valorHora      = parseCurrency(document.getElementById('l-valor-hora')?.value  || '0') || '';
+  const diasVR         = document.getElementById('l-dias-vr')?.value || '';
+  const valorDiaVR     = parseCurrency(document.getElementById('l-valor-dia-vr')?.value || '0') || '';
+  const totalVR        = parseCurrency(document.getElementById('l-total-vr')?.value     || '0') || '';
+  const totalEmprestimo= parseCurrency(document.getElementById('l-total-emp')?.value    || '0') || '';
+  const totalParcelas  = document.getElementById('l-parcelas')?.value || '';
+  const qtdFaltas      = document.getElementById('l-qtd-faltas')?.value || '';
+
+  if (tipo === 'Hora Extra') valor = parseCurrency(document.getElementById('l-valor-he')?.value || '0') || '';
+
+  const categoria = isEntrada(tipo) ? 'Entrada' : isSaida(tipo) ? 'Saída' : '';
+
+  const obj = {
+    id:              editId || uid(),
+    funcionarioId:   funcId,
+    mes:             document.getElementById('l-comp-top')?.value || mes,
+    competencia:     document.getElementById('l-comp-top')?.value || mes,
+    dataLancamento:  document.getElementById('l-data-lanc')?.value || new Date().toISOString().slice(0,10),
+    categoria,
+    tipo,
+    valor,
+    // campos extras
+    qtdHoras, valorHora,
+    diasVR, valorDiaVR, totalVR,
+    totalEmprestimo, totalParcelas,
+    parcelaAtual: editId ? (cache.lancamentos.find(l=>l.id===editId)?.parcelaAtual||1) : 1,
+    obs: (tipo === 'Empréstimo' && !editId && Number(totalParcelas) > 1)
+      ? `Parcela 1/${totalParcelas}${document.getElementById('l-obs')?.value ? ' — ' + document.getElementById('l-obs').value : ''}`
+      : document.getElementById('l-obs')?.value || '',
+    qtdFaltas,
+    unidade: tipo === 'Hora Extra' ? 'h' : tipo === 'Falta' ? 'd' : '',
+    justificado:  '',
+    anexoNome:   novoAnexo?.nome || (editId ? cache.lancamentos.find(l=>l.id===editId)?.anexoNome||'' : ''),
+    anexoBase64: '',
+  };
+
+  if (novoAnexo) {
+    if (config.gsUrl) {
+      try {
+        showToast('Enviando anexo para o Drive...', 'ok');
+        const r = await gsCall('salvarAnexo', {
+          nome:   novoAnexo.nome,
+          base64: novoAnexo.base64,
+          mime:   novoAnexo.mime
+        });
+        obj.anexoNome   = novoAnexo.nome;
+        obj.anexoBase64 = r.url; // link permanente do Google Drive
+      } catch(e) {
+        showToast('Erro ao enviar anexo para o Drive: ' + e.message, 'err'); return;
+      }
+    } else {
+      // Fallback: salva localmente se Sheets não estiver configurado
+      if (!salvarAnexo(obj.id, novoAnexo)) return;
+    }
+  }
+
+  if (config.gsUrl) {
+    try {
+      await saveLancamento(obj);
+      showToast(editId ? 'Lançamento atualizado no Sheets!' : 'Lançamento salvo no Sheets!', 'ok');
+    } catch(e) {
+      showToast('Erro ao salvar no Sheets: ' + e.message, 'err'); return;
+    }
+  } else {
+    showToast(editId ? 'Lançamento atualizado localmente.' : 'Salvo localmente (Sheets não configurado)', 'ok');
+  }
+
+  if (editId) {
+    const idx = cache.lancamentos.findIndex(x => x.id === editId);
+    if (idx >= 0) cache.lancamentos[idx] = obj;
+    else cache.lancamentos.push(obj);
+  } else {
+    cache.lancamentos.push(obj);
+
+    // Auto-lançar parcelas restantes do empréstimo
+    if (tipo === 'Empréstimo' && Number(totalParcelas) > 1) {
+      const nParcelas = parseInt(totalParcelas);
+      let mesParc = document.getElementById('l-comp-top')?.value || mes;
+      for (let i = 2; i <= nParcelas; i++) {
+        mesParc = _proximoMes(mesParc);
+        const parcObj = {
+          ...obj,
+          id:           uid(),
+          mes:          mesParc,
+          competencia:  mesParc,
+          parcelaAtual: i,
+          obs: `Parcela ${i}/${nParcelas}${obj.obs ? ' — ' + obj.obs : ''}`,
+        };
+        cache.lancamentos.push(parcObj);
+        if (config.gsUrl) {
+          try { await saveLancamento(parcObj); } catch(e) { /* continua */ }
+        }
+      }
+      showToast(`✓ ${nParcelas} parcelas lançadas automaticamente!`, 'ok');
+    }
+  }
+  saveCache();
+  closeModal();
+  renderLancArea();
+}
+
+async function excluirLancamento(id) {
+  if (!confirm('Excluir este lançamento?')) return;
+  if (config.gsUrl) {
+    try { await deleteLancamento(id); }
+    catch(e) { showToast('Erro: ' + e.message, 'err'); return; }
+  }
+  apagarAnexo(id);
+  cache.lancamentos = cache.lancamentos.filter(l => l.id !== id);
+  saveCache();
+  renderLancArea();
+  showToast('Lançamento excluído.', 'ok');
+}
+
+function toBase64(file) {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload  = () => resolve({ base64: r.result.split(',')[1], mime: file.type, nome: file.name });
+    r.onerror = () => reject(new Error('Falha ao ler o arquivo'));
+    r.readAsDataURL(file);
+  });
+}
+window.abrirAnexo = function(id) {
+  // Primeiro tenta abrir pelo link do Drive (salvo em cache do lançamento)
+  const lanc = cache.lancamentos.find(l => l.id === id);
+  if (lanc && lanc.anexoBase64 && lanc.anexoBase64.startsWith('http')) {
+    window.open(lanc.anexoBase64, '_blank');
+    return;
+  }
+  // Fallback: tenta abrir do localStorage (arquivos salvos antes da integração com Drive)
+  const a = lerAnexo(id);
+  if (!a || !a.base64) { showToast('Arquivo não encontrado. Faça o upload novamente.','err'); return; }
+  try {
+    const bytes = atob(a.base64);
+    const buf = new Uint8Array(bytes.length);
+    for (let i=0;i<bytes.length;i++) buf[i]=bytes.charCodeAt(i);
+    const blob = new Blob([buf],{type:a.mime||'application/octet-stream'});
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href=url; link.download=a.nome||'anexo'; link.click();
+    setTimeout(()=>URL.revokeObjectURL(url),5000);
+  } catch(e){ showToast('Erro ao abrir arquivo: '+e.message,'err'); }
+};
+
+// ═══════════════════════════════════════════════════════
+//  HOLERITE / PDF
+// ═══════════════════════════════════════════════════════
+function renderHolerite(c) {
+  const mesAtual = new Date().toISOString().slice(0, 7);
+  c.innerHTML = `
+    <div class="card" style="max-width:700px;">
+      <div class="card-header"><h3>Gerar Holerite / Relatório PDF</h3></div>
+      <div class="card-body">
+        <div class="grid-2">
+          <div class="field">
+            <label>Funcionário</label>
+            <select id="rel-func">
+              <option value="">Todos os ativos</option>
+              ${cache.funcionarios.map(f => `<option value="${f.id}">${f.nome}</option>`).join('')}
+            </select>
+          </div>
+          <div class="field">
+            <label>Mês de referência (Holerite)</label>
+            <input type="month" id="rel-mes" value="${mesAtual}">
+          </div>
+        </div>
+        <div style="border-top:1px solid var(--border);margin:10px 0 14px;padding-top:14px;">
+          <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.05em;">Período para Relatório Geral</div>
+          <div class="grid-2">
+            <div class="field">
+              <label>Mês inicial</label>
+              <input type="month" id="rel-periodo-ini" value="${mesAtual}">
+            </div>
+            <div class="field">
+              <label>Mês final</label>
+              <input type="month" id="rel-periodo-fim" value="${mesAtual}">
+            </div>
+          </div>
+          <div class="field" style="margin-top:4px;">
+            <label>Filtrar situação</label>
+            <select id="rel-situacao" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);font-size:13px;font-family:'DM Sans',sans-serif;">
+              <option value="ativos">Somente Ativos</option>
+              <option value="inativos">Somente Inativos</option>
+              <option value="todos">Todos (Ativos + Inativos)</option>
+            </select>
+          </div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;">
+          <button class="btn primary" onclick="gerarHoleritePDF()">📄 Holerite(s)</button>
+          <button class="btn" onclick="gerarRelatorioGeral()">📊 Relatório Geral (período)</button>
+          <button class="btn" onclick="gerarListaFuncionarios()">👥 Lista de Funcionários</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card" id="preview-card" style="max-width:700px;">
+      <div class="card-header"><h3>Prévia</h3></div>
+      <div class="card-body" id="preview-body">
+        <p style="color:var(--text3);font-size:13px;">Selecione as opções acima e clique em gerar.</p>
+      </div>
+    </div>
+  `;
+}
+
+function calcLiquidoFuncionario(f, mes) {
+  const lancs = cache.lancamentos.filter(l => l.funcionarioId === f.id && (l.competencia || l.mes) === mes);
+  let totalProv = Number(f.salario || 0);
+  let totalDesc = 0;
+  const detalhesProv = [{ desc: 'Salário base', val: totalProv }];
+  const detalhesDesc = [];
+
+  lancs.forEach(l => {
+    const v = Number(l.valor || 0);
+    if (isEntrada(l.tipo)) {
+      totalProv += v;
+      detalhesProv.push({ desc: l.tipo, val: v });
+    } else if (isSaida(l.tipo)) {
+      totalDesc += v;
+      detalhesDesc.push({ desc: l.tipo, val: v });
+    }
+    // legado (tipos antigos fora de TIPOS_ENTRADA/TIPOS_SAIDA)
+    const legadoE = ['VA'];
+    const legadoS = ['INSS','IR','Desconto','Plano de Saúde','VT'];
+    if (legadoE.includes(l.tipo)) { totalProv += v; detalhesProv.push({ desc: l.tipo, val: v }); }
+    if (legadoS.includes(l.tipo)) { totalDesc += v; detalhesDesc.push({ desc: l.tipo, val: v }); }
+  });
+
+  return { totalProv, totalDesc, liquido: totalProv - totalDesc, detalhesProv, detalhesDesc, lancs };
+}
+
+function calcLiquidoFuncionarioPeriodo(f, mesIni, mesFim) {
+  const lancs = cache.lancamentos.filter(l => {
+    const comp = l.competencia || l.mes || '';
+    return l.funcionarioId === f.id && comp >= mesIni && comp <= mesFim;
+  });
+
+  const meses = new Set();
+  let m = mesIni;
+  while (m <= mesFim) {
+    meses.add(m);
+    const [y, mo] = m.split('-').map(Number);
+    m = mo === 12 ? `${y+1}-01` : `${y}-${String(mo+1).padStart(2,'0')}`;
+  }
+  const numMeses = meses.size;
+  const salarioTotal = Number(f.salario || 0) * numMeses;
+
+  let totalProv = salarioTotal;
+  let totalDesc = 0;
+  const legadoE = ['VA'];
+  const legadoS = ['INSS','IR','Desconto','Plano de Saúde','VT'];
+
+  lancs.forEach(l => {
+    const v = Number(l.valor || 0);
+    if (isEntrada(l.tipo))      { totalProv += v; }
+    else if (isSaida(l.tipo))   { totalDesc += v; }
+    else if (legadoE.includes(l.tipo)) { totalProv += v; }
+    else if (legadoS.includes(l.tipo)) { totalDesc += v; }
+  });
+
+  return { salarioTotal, totalProv, totalDesc, liquido: totalProv - totalDesc, lancs };
+}
+
+function gerarHoleritePDF() {
+  const { jsPDF } = window.jspdf;
+  const funcId   = document.getElementById('rel-func').value;
+  const mes      = document.getElementById('rel-mes').value;
+  const situacao = document.getElementById('rel-situacao')?.value || 'ativos';
+
+  function matchSituacao(f) {
+    const ativo = !f.dataDemissao || f.dataDemissao === '';
+    if (situacao === 'ativos')   return ativo;
+    if (situacao === 'inativos') return !ativo;
+    return true;
+  }
+
+  const funcs = funcId
+    ? cache.funcionarios.filter(f => f.id === funcId)
+    : cache.funcionarios.filter(matchSituacao);
+
+  if (!funcs.length) { showToast('Nenhum funcionário encontrado', 'err'); return; }
+
+  const doc = new jsPDF({ orientation: 'p', unit: 'mm', format: 'a4' });
+
+  funcs.forEach((f, fi) => {
+    if (fi > 0) doc.addPage();
+    const calc = calcLiquidoFuncionario(f, mes);
+
+    // Header
+    doc.setFillColor(27, 79, 138);
+    doc.rect(0, 0, 210, 35, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(18); doc.setFont('helvetica', 'bold');
+    doc.text('HOLERITE', 15, 14);
+    doc.setFontSize(10); doc.setFont('helvetica', 'normal');
+    doc.text(`Referência: ${mes}`, 15, 22);
+    doc.text(`Emitido em: ${new Date().toLocaleDateString('pt-BR')}`, 15, 28);
+
+    // Funcionário
+    doc.setFillColor(241, 240, 237);
+    doc.rect(10, 39, 190, 32, 'F');
+    doc.setTextColor(26, 25, 22);
+    doc.setFontSize(13); doc.setFont('helvetica', 'bold');
+    doc.text(f.nome, 15, 49);
+    doc.setFontSize(9); doc.setFont('helvetica', 'normal');
+    doc.setTextColor(107, 104, 96);
+    const linha1 = `CPF: ${f.cpf || '—'}   |   Cargo: ${f.cargo || '—'}   |   Admissão: ${fmtDate(f.dataAdmissao)}`;
+    doc.text(linha1, 15, 57);
+    const linha2 = `Banco: ${f.banco || '—'}   Ag: ${f.agencia || '—'}   Conta: ${f.conta || '—'}   PIX: ${f.pix || '—'}`;
+    doc.text(linha2, 15, 63);
+
+    let y = 82;
+    // Colunas proventos | descontos
+    doc.setTextColor(26, 25, 22);
+    doc.setFontSize(10); doc.setFont('helvetica', 'bold');
+    doc.text('PROVENTOS', 15, y);
+    doc.text('DESCONTOS', 115, y);
+    y += 4;
+    doc.setDrawColor(200, 197, 190);
+    doc.line(10, y, 205, y);
+    y += 7;
+
+    doc.setFontSize(9); doc.setFont('helvetica', 'normal');
+    doc.setTextColor(26, 25, 22);
+
+    const maxLinhas = Math.max(calc.detalhesProv.length, calc.detalhesDesc.length);
+    for (let i = 0; i < maxLinhas; i++) {
+      if (calc.detalhesProv[i]) {
+        doc.text(calc.detalhesProv[i].desc, 15, y);
+        doc.text(fmt(calc.detalhesProv[i].val), 100, y, { align: 'right' });
+      }
+      if (calc.detalhesDesc[i]) {
+        doc.text(calc.detalhesDesc[i].desc, 115, y);
+        doc.text(fmt(calc.detalhesDesc[i].val), 200, y, { align: 'right' });
+      }
+      y += 7;
+    }
+
+    y += 3;
+    doc.setDrawColor(200, 197, 190);
+    doc.line(10, y, 205, y);
+    y += 8;
+
+    doc.setFont('helvetica', 'bold');
+    doc.text('Total Proventos:', 15, y);
+    doc.text(fmt(calc.totalProv), 100, y, { align: 'right' });
+    doc.text('Total Descontos:', 115, y);
+    doc.text(fmt(calc.totalDesc), 200, y, { align: 'right' });
+    y += 10;
+
+    // Líquido
+    doc.setFillColor(27, 79, 138);
+    doc.rect(10, y, 190, 14, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(12);
+    doc.text('SALÁRIO LÍQUIDO A RECEBER:', 15, y + 9);
+    doc.text(fmt(calc.liquido), 200, y + 9, { align: 'right' });
+    y += 22;
+
+    // Observações
+    if (calc.lancs.filter(l => l.obs).length) {
+      doc.setTextColor(107, 104, 96);
+      doc.setFontSize(8); doc.setFont('helvetica', 'normal');
+      calc.lancs.filter(l => l.obs).forEach(l => {
+        doc.text(`${l.tipo}: ${l.obs}`, 15, y);
+        y += 5;
+      });
+    }
+
+    // Rodapé
+    doc.setTextColor(180, 175, 165);
+    doc.setFontSize(8);
+    doc.text('FolhaPay · Documento gerado automaticamente', 105, 285, { align: 'center' });
+    doc.line(15, 280, 195, 280);
+    doc.text('Assinatura Empregado: ___________________________', 15, 277);
+    doc.text('Assinatura Empresa: ___________________________', 115, 277);
+  });
+
+  doc.save(`holerite_${mes}_${funcs.length > 1 ? 'todos' : funcs[0].nome.replace(/ /g, '_')}.pdf`);
+  showToast('✓ PDF gerado!', 'ok');
+  document.getElementById('preview-body').innerHTML = `<span style="color:var(--green);font-weight:500;">✓ Holerite(s) gerado(s) para ${funcs.length} funcionário(s) — ${mes}</span>`;
+}
+
+function gerarRelatorioGeral() {
+  const { jsPDF } = window.jspdf;
+  const mesIni   = document.getElementById('rel-periodo-ini')?.value;
+  const mesFim   = document.getElementById('rel-periodo-fim')?.value;
+  const situacao = document.getElementById('rel-situacao')?.value || 'ativos';
+  if (!mesIni || !mesFim) { showToast('Selecione o período inicial e final', 'err'); return; }
+  if (mesIni > mesFim) { showToast('Mês inicial deve ser anterior ao final', 'err'); return; }
+
+  function matchSituacao(f) {
+    const ativo = !f.dataDemissao || f.dataDemissao === '';
+    if (situacao === 'ativos')   return ativo;
+    if (situacao === 'inativos') return !ativo;
+    return true;
+  }
+
+  const situacaoLabel = { ativos: 'Ativos', inativos: 'Inativos', todos: 'Todos' }[situacao] || '';
+  const periodoLabel = mesIni === mesFim ? mesIni : `${mesIni} a ${mesFim}`;
+  const doc = new jsPDF({ orientation: 'l', unit: 'mm', format: 'a4' });
+
+  // Cabeçalho azul
+  doc.setFillColor(27, 79, 138);
+  doc.rect(0, 0, 297, 22, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(13); doc.setFont('helvetica', 'bold');
+  doc.text(`Relatório Geral de Folha de Pagamento — ${periodoLabel} · ${situacaoLabel}`, 148, 14, { align: 'center' });
+
+  // Colunas: Funcionário(10) | Cargo(75) | Sal.Base(130) | Recebimentos(165) | Descontos(205) | Líquido(245)
+  const COL = { nome: 10, cargo: 65, salBase: 130, receb: 165, desc: 205, liq: 245 };
+
+  let y = 32;
+  doc.setTextColor(26, 25, 22);
+  doc.setFontSize(8.5); doc.setFont('helvetica', 'bold');
+  doc.text('Funcionário',    COL.nome,  y);
+  doc.text('Cargo',          COL.cargo, y);
+  doc.text('Salário Base',   COL.salBase, y, { align: 'right' });
+  doc.text('Recebimentos',   COL.receb,   y, { align: 'right' });
+  doc.text('Descontos',      COL.desc,    y, { align: 'right' });
+  doc.text('Líquido Final',  COL.liq,     y, { align: 'right' });
+  y += 3;
+  doc.setDrawColor(200, 197, 190);
+  doc.line(8, y, 285, y);
+  y += 6;
+
+  let totSalBase = 0, totReceb = 0, totDesc = 0, totLiq = 0;
+  doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5);
+
+  cache.funcionarios.filter(matchSituacao).forEach(f => {
+    const calc = calcLiquidoFuncionarioPeriodo(f, mesIni, mesFim);
+    // Recebimentos = salário base + todas as entradas
+    const recebimentos = calc.totalProv;
+    // Descontos = todas as saídas (inclui adiantamento)
+    const descontos = calc.totalDesc;
+    const liquido = calc.liquido;
+
+    totSalBase += calc.salarioTotal;
+    totReceb   += recebimentos;
+    totDesc    += descontos;
+    totLiq     += liquido;
+
+    doc.setTextColor(26, 25, 22);
+    doc.text(String(f.nome  || '').slice(0, 28), COL.nome,  y);
+    doc.text(String(f.cargo || '').slice(0, 28), COL.cargo, y);
+    doc.text(fmt(calc.salarioTotal), COL.salBase, y, { align: 'right' });
+    doc.setTextColor(26, 107, 69);
+    doc.text(fmt(recebimentos),      COL.receb,   y, { align: 'right' });
+    doc.setTextColor(139, 32, 32);
+    doc.text(fmt(descontos),         COL.desc,    y, { align: 'right' });
+    doc.setFont('helvetica', 'bold');
+    doc.setTextColor(26, 25, 22);
+    doc.text(fmt(liquido),           COL.liq,     y, { align: 'right' });
+    doc.setFont('helvetica', 'normal');
+    y += 8;
+    if (y > 190) { doc.addPage(); y = 20; }
+  });
+
+  // Linha de totais
+  doc.setDrawColor(200, 197, 190);
+  doc.line(8, y, 285, y);
+  y += 6;
+  doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5);
+  doc.setTextColor(26, 25, 22);
+  doc.text('TOTAIS', COL.nome, y);
+  doc.text(fmt(totSalBase), COL.salBase, y, { align: 'right' });
+  doc.setTextColor(26, 107, 69);
+  doc.text(fmt(totReceb),   COL.receb,   y, { align: 'right' });
+  doc.setTextColor(139, 32, 32);
+  doc.text(fmt(totDesc),    COL.desc,    y, { align: 'right' });
+  doc.setTextColor(26, 25, 22);
+  doc.text(fmt(totLiq),     COL.liq,     y, { align: 'right' });
+
+  doc.save(`relatorio_folha_${mesIni}_${mesFim}.pdf`);
+  showToast('✓ Relatório geral gerado!', 'ok');
+}
+
+function gerarListaFuncionarios() {
+  const { jsPDF } = window.jspdf;
+  const situacao = document.getElementById('rel-situacao')?.value || 'ativos';
+  function matchSituacao(f) {
+    const ativo = !f.dataDemissao || f.dataDemissao === '';
+    if (situacao === 'ativos')   return ativo;
+    if (situacao === 'inativos') return !ativo;
+    return true;
+  }
+  const situacaoLabel = { ativos: 'Ativos', inativos: 'Inativos', todos: 'Todos' }[situacao] || '';
+  const doc = new jsPDF();
+  doc.setFillColor(27, 79, 138);
+  doc.rect(0, 0, 210, 22, 'F');
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(14); doc.setFont('helvetica', 'bold');
+  doc.text(`Lista de Funcionários — ${situacaoLabel}`, 105, 14, { align: 'center' });
+
+  let y = 32;
+  cache.funcionarios.filter(matchSituacao).forEach(f => {
+    doc.setTextColor(26, 25, 22);
+    doc.setFontSize(11); doc.setFont('helvetica', 'bold');
+    doc.text(f.nome, 15, y);
+    doc.setFontSize(8); doc.setFont('helvetica', 'normal');
+    doc.setTextColor(107, 104, 96);
+    doc.text(`CPF: ${f.cpf||'—'}  |  Cargo: ${f.cargo||'—'}  |  Admissão: ${fmtDate(f.dataAdmissao)}  |  Salário: ${fmt(f.salario)}`, 15, y + 5);
+    doc.text(`E-mail: ${f.email||'—'}  |  Tel: ${f.telefone||'—'}  |  Banco: ${f.banco||'—'}  Ag: ${f.agencia||'—'}  Conta: ${f.conta||'—'}`, 15, y + 10);
+    y += 18;
+    if (y > 270) { doc.addPage(); y = 20; }
+  });
+  doc.save('lista_funcionarios.pdf');
+  showToast('✓ Lista exportada!', 'ok');
+}
+
+// ═══════════════════════════════════════════════════════
+//  UTIL
+// ═══════════════════════════════════════════════════════
+function esc(s) {
+  return String(s || '').replace(/"/g, '&quot;').replace(/'/g, '&#39;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+// ═══════════════════════════════════════════════════════
+//  INIT
+// ═══════════════════════════════════════════════════════
+document.getElementById('mes-label').textContent = new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
+render('dashboard');
+</script>
+</body>
+</html>
