@@ -714,7 +714,12 @@ async function syncAll() {
     showToast('Sincronizando...', 'ok');
     const r = await gsCall('getAll');
     cache.funcionarios = r.funcionarios || [];
-    cache.lancamentos  = r.lancamentos  || [];
+    // Normaliza: garante que todo lançamento tenha o campo 'competencia' preenchido
+    cache.lancamentos  = (r.lancamentos || []).map(l => ({
+      ...l,
+      competencia: l.competencia || l.mes || '',
+      mes:         l.mes || l.competencia || '',
+    }));
     saveCache();
     updateGSStatus(true);
     showToast('✓ Sincronizado com sucesso!', 'ok');
@@ -902,7 +907,7 @@ function renderDashboard(c) {
                     <span class="badge ${badgeClass(l.tipo)}" style="min-width:80px;justify-content:center;">${l.tipo}</span>
                     <div style="flex:1;min-width:0;">
                       <div style="font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${f ? f.nome : '—'}</div>
-                      <div style="font-size:11px;color:var(--text3);font-family:'DM Mono',monospace;">${l.mes}</div>
+                      <div style="font-size:11px;color:var(--text3);font-family:'DM Mono',monospace;">${l.competencia || l.mes || '—'}</div>
                     </div>
                     <div style="font-size:13px;font-weight:500;font-family:'DM Mono',monospace;">${l.valor ? fmt(l.valor) : (l.quantidade ? l.quantidade + ' ' + (l.unidade||'') : '—')}</div>
                   </div>
@@ -1139,8 +1144,10 @@ function applyMaskCurrency(inputId) {
   const el = document.getElementById(inputId);
   if (!el) return;
   el.addEventListener('input', function() {
-    const raw = this.value.replace(/\D/g, '');
+    let raw = this.value.replace(/\D/g, '');
     if (!raw) { this.value = ''; return; }
+    // Remove zeros à esquerda para evitar acúmulo ao digitar 0
+    raw = raw.replace(/^0+/, '') || '0';
     this.value = maskCurrency(raw);
     const len = this.value.length;
     this.setSelectionRange(len, len);
@@ -1149,8 +1156,11 @@ function applyMaskCurrency(inputId) {
 
 // Versão inline para usar no oninput= de templates gerados dinamicamente
 function applyMaskCurrencyInline(el) {
-  const raw = el.value.replace(/\D/g, '');
+  // Remove tudo que não for dígito e também zeros à esquerda para evitar acúmulo
+  let raw = el.value.replace(/\D/g, '');
   if (!raw) { el.value = ''; return; }
+  // Remove zeros à esquerda excessivos (mantém pelo menos 1 dígito)
+  raw = raw.replace(/^0+/, '') || '0';
   el.value = maskCurrency(raw);
   const len = el.value.length;
   el.setSelectionRange(len, len);
