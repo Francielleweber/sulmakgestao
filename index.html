@@ -17,7 +17,7 @@
     --text: #012f24;
     --text2: #6B6860;
     --text3: #9C9A93;
-    --accent: #1B4F8A;
+    --accent: #012f24;
     --accent-light: #E8EFF8;
     --accent-text: #1B4F8A;
     --green: #1A6B45;
@@ -2386,7 +2386,7 @@ function gerarHoleritePDF() {
     const calc = calcLiquidoFuncionario(f, mes);
 
     // Header
-    doc.setFillColor(27, 79, 138);
+    doc.setFillColor(1, 47, 36);
     doc.rect(0, 0, 210, 35, 'F');
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(18); doc.setFont('helvetica', 'bold');
@@ -2448,7 +2448,7 @@ function gerarHoleritePDF() {
     y += 10;
 
     // Líquido
-    doc.setFillColor(27, 79, 138);
+    doc.setFillColor(1, 47, 36);
     doc.rect(10, y, 190, 14, 'F');
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(12);
@@ -2500,7 +2500,7 @@ function gerarRelatorioGeral() {
   const doc = new jsPDF({ orientation: 'l', unit: 'mm', format: 'a4' });
 
   // Cabeçalho azul
-  doc.setFillColor(27, 79, 138);
+  doc.setFillColor(1, 47, 36);
   doc.rect(0, 0, 297, 22, 'F');
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(13); doc.setFont('helvetica', 'bold');
@@ -2585,7 +2585,7 @@ function gerarListaFuncionarios() {
   }
   const situacaoLabel = { ativos: 'Ativos', inativos: 'Inativos', todos: 'Todos' }[situacao] || '';
   const doc = new jsPDF();
-  doc.setFillColor(27, 79, 138);
+  doc.setFillColor(1, 47, 36);
   doc.rect(0, 0, 210, 22, 'F');
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(14); doc.setFont('helvetica', 'bold');
