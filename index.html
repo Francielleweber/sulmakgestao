@@ -789,7 +789,7 @@ function openModal(html) {
   const el = document.createElement('div');
   el.className = 'modal-overlay';
   el.innerHTML = html;
-  el.addEventListener('click', e => { if(e.target === el) closeModal(); });
+
   document.body.appendChild(el);
   modalEl = el;
   return el;
@@ -857,7 +857,7 @@ function renderDashboard(c) {
   const lancMes   = cache.lancamentos.filter(l => mesDeData(l.competencia || l.mes) === mesAtual);
   const folhaBruta = cache.funcionarios
     .filter(f => !f.dataDemissao || f.dataDemissao === '')
-    .reduce((s, f) => s + Number(f.salario || 0), 0);
+    .reduce((s, f) => s + Number(f.salario || 0) + Number(f.insalubridade || 0), 0);
 
   c.innerHTML = `
     <div class="metrics-grid">
@@ -869,7 +869,7 @@ function renderDashboard(c) {
       <div class="metric-card">
         <div class="label">Folha Bruta — ${mesAtual}</div>
         <div class="value" style="font-size:18px;">${fmt(folhaBruta)}</div>
-        <div class="sub">salários base</div>
+        <div class="sub">salários base + insalubridade</div>
       </div>
       <div class="metric-card">
         <div class="label">Lançamentos — ${mesAtual}</div>
@@ -1049,6 +1049,7 @@ function renderFuncionarios(c) {
                 <th>Cargo</th>
                 <th>Admissão</th>
                 <th>Salário Base</th>
+                <th>Insalubridade</th>
                 <th>Status</th>
                 <th style="width:100px;"></th>
               </tr>
@@ -1076,7 +1077,7 @@ function renderFuncTabela(busca) {
   const tbody = document.getElementById('tbody-func');
   if (!tbody) return;
   if (!lista.length) {
-    tbody.innerHTML = `<tr><td colspan="7"><div class="empty-state"><div class="icon">👥</div><h4>Nenhum resultado</h4><p>Tente outro termo ou cadastre um funcionário.</p></div></td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="8"><div class="empty-state"><div class="icon">👥</div><h4>Nenhum resultado</h4><p>Tente outro termo ou cadastre um funcionário.</p></div></td></tr>`;
     return;
   }
   tbody.innerHTML = lista.map(f => {
@@ -1096,6 +1097,7 @@ function renderFuncTabela(busca) {
       <td>${f.cargo || '—'}</td>
       <td style="font-family:'DM Mono',monospace;font-size:12px;">${fmtDate(f.dataAdmissao)}</td>
       <td style="font-family:'DM Mono',monospace;font-size:13px;font-weight:500;">${fmt(f.salario)}</td>
+      <td style="font-family:'DM Mono',monospace;font-size:13px;font-weight:500;color:var(--amber);">${Number(f.insalubridade||0) > 0 ? fmt(f.insalubridade) : '—'}</td>
       <td><span class="badge ${ativo ? 'badge-green' : 'badge-red'}">${ativo ? 'Ativo' : 'Inativo'}</span></td>
       <td>
         <div style="display:flex;gap:4px;">
@@ -1236,6 +1238,7 @@ function initFuncionarioMasks() {
   applyMask('f-tel', maskPhone);
   applyMask('f-end-cep', maskCEP);
   applyMaskCurrency('f-salario');
+  applyMaskCurrency('f-insalubridade');
 }
 
 function modalFuncionario(id) {
@@ -1284,6 +1287,10 @@ function modalFuncionario(id) {
           <div class="grid-2">
             <div class="field required"><label>Cargo</label><input id="f-cargo" value="${f ? esc(f.cargo||'') : ''}" placeholder="Ex: Analista, Gerente..."></div>
             <div class="field required"><label>Salário Base (R$)</label><input id="f-salario" type="text" inputmode="numeric" value="${f ? maskCurrency(f.salario) : ''}" placeholder="R$ 0,00"></div>
+          </div>
+          <div class="grid-2">
+            <div class="field"><label>Insalubridade (R$)</label><input id="f-insalubridade" type="text" inputmode="numeric" value="${f ? maskCurrency(f.insalubridade || 0) : ''}" placeholder="R$ 0,00"></div>
+            <div></div>
           </div>
           <div class="grid-2">
             <div class="field"><label>Data de admissão</label><input id="f-adm" type="date" value="${f ? toInputDate(f.dataAdmissao) : ''}"></div>
@@ -1339,9 +1346,11 @@ async function salvarFuncionarioLocal(id) {
   const salario = parseCurrency(document.getElementById('f-salario')?.value || '');
   if (!nome || !cpf) { showToast('Nome e CPF são obrigatórios', 'err'); return; }
 
+  const insalubridade = parseCurrency(document.getElementById('f-insalubridade')?.value || '');
+
   const obj = {
     id:           id || '',
-    nome, cpf, cargo, salario,
+    nome, cpf, cargo, salario, insalubridade,
     endereco:     [
                     document.getElementById('f-end-rua')?.value    || '',
                     document.getElementById('f-end-num')?.value    || '',
@@ -2302,9 +2311,11 @@ function renderHolerite(c) {
 
 function calcLiquidoFuncionario(f, mes) {
   const lancs = cache.lancamentos.filter(l => l.funcionarioId === f.id && mesDeData(l.competencia || l.mes) === mes);
-  let totalProv = Number(f.salario || 0);
+  const insalubridade = Number(f.insalubridade || 0);
+  let totalProv = Number(f.salario || 0) + insalubridade;
   let totalDesc = 0;
-  const detalhesProv = [{ desc: 'Salário base', val: totalProv }];
+  const detalhesProv = [{ desc: 'Salário base', val: Number(f.salario || 0) }];
+  if (insalubridade > 0) detalhesProv.push({ desc: 'Insalubridade', val: insalubridade });
   const detalhesDesc = [];
 
   lancs.forEach(l => {
@@ -2344,7 +2355,8 @@ function calcLiquidoFuncionarioPeriodo(f, mesIni, mesFim) {
     m = mo === 12 ? `${y+1}-01` : `${y}-${String(mo+1).padStart(2,'0')}`;
   }
   const numMeses = meses.size;
-  const salarioTotal = Number(f.salario || 0) * numMeses;
+  const insalubridade = Number(f.insalubridade || 0);
+  const salarioTotal = (Number(f.salario || 0) + insalubridade) * numMeses;
 
   let totalProv = salarioTotal;
   let totalDesc = 0;
@@ -2600,7 +2612,7 @@ function gerarListaFuncionarios() {
     doc.text(f.nome, 15, y);
     doc.setFontSize(8); doc.setFont('helvetica', 'normal');
     doc.setTextColor(107, 104, 96);
-    doc.text(`CPF: ${f.cpf||'—'}  |  Cargo: ${f.cargo||'—'}  |  Admissão: ${fmtDate(f.dataAdmissao)}  |  Salário: ${fmt(f.salario)}`, 15, y + 5);
+    doc.text(`CPF: ${f.cpf||'—'}  |  Cargo: ${f.cargo||'—'}  |  Admissão: ${fmtDate(f.dataAdmissao)}  |  Salário Base: ${fmt(f.salario)}  |  Insalubridade: ${fmt(f.insalubridade||0)}`, 15, y + 5);
     doc.text(`E-mail: ${f.email||'—'}  |  Tel: ${f.telefone||'—'}  |  Banco: ${f.banco||'—'}  Ag: ${f.agencia||'—'}  Conta: ${f.conta||'—'}`, 15, y + 10);
     y += 18;
     if (y > 270) { doc.addPage(); y = 20; }
