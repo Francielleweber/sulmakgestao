@@ -717,6 +717,7 @@ async function syncAll() {
     // Normaliza datas dos funcionários (podem vir como ISO completo do Sheets)
     cache.funcionarios = (r.funcionarios || []).map(f => ({
       ...f,
+      dataNascimento: toInputDate(f.dataNascimento),
       dataAdmissao: toInputDate(f.dataAdmissao),
       dataDemissao: toInputDate(f.dataDemissao),
     }));
@@ -857,7 +858,7 @@ function renderDashboard(c) {
   const lancMes   = cache.lancamentos.filter(l => mesDeData(l.competencia || l.mes) === mesAtual);
   const folhaBruta = cache.funcionarios
     .filter(f => !f.dataDemissao || f.dataDemissao === '')
-    .reduce((s, f) => s + Number(f.salario || 0) + Number(f.insalubridade || 0) + Number(f.adicionalSalario || 0), 0);
+    .reduce((s, f) => s + Number(f.salario || 0) + Number(f.insalubridade || 0) + Number(f.adicionalSalario || 0) + Number(f.ats || 0), 0);
 
   c.innerHTML = `
     <div class="metrics-grid">
@@ -869,7 +870,7 @@ function renderDashboard(c) {
       <div class="metric-card">
         <div class="label">Folha Bruta — ${mesAtual}</div>
         <div class="value" style="font-size:18px;">${fmt(folhaBruta)}</div>
-        <div class="sub">salários base + insalubridade + adicional</div>
+        <div class="sub">salários base + insalubridade + adicional + ATS</div>
       </div>
       <div class="metric-card">
         <div class="label">Lançamentos — ${mesAtual}</div>
@@ -1051,6 +1052,7 @@ function renderFuncionarios(c) {
                 <th>Salário Base</th>
                 <th>Insalubridade</th>
                 <th>Adicional</th>
+                <th>ATS</th>
                 <th>Status</th>
                 <th style="width:100px;"></th>
               </tr>
@@ -1100,6 +1102,7 @@ function renderFuncTabela(busca) {
       <td style="font-family:'DM Mono',monospace;font-size:13px;font-weight:500;">${fmt(f.salario)}</td>
       <td style="font-family:'DM Mono',monospace;font-size:13px;font-weight:500;color:var(--amber);">${Number(f.insalubridade||0) > 0 ? fmt(f.insalubridade) : '—'}</td>
       <td style="font-family:'DM Mono',monospace;font-size:13px;font-weight:500;color:var(--accent-text);">${Number(f.adicionalSalario||0) > 0 ? fmt(f.adicionalSalario) : '—'}</td>
+      <td style="font-family:'DM Mono',monospace;font-size:13px;font-weight:500;color:var(--purple,#a78bfa);">${Number(f.ats||0) > 0 ? fmt(f.ats) : '—'}</td>
       <td><span class="badge ${ativo ? 'badge-green' : 'badge-red'}">${ativo ? 'Ativo' : 'Inativo'}</span></td>
       <td>
         <div style="display:flex;gap:4px;">
@@ -1242,6 +1245,7 @@ function initFuncionarioMasks() {
   applyMaskCurrency('f-salario');
   applyMaskCurrency('f-insalubridade');
   applyMaskCurrency('f-adicional-salario');
+  applyMaskCurrency('f-ats');
 }
 
 function modalFuncionario(id) {
@@ -1294,6 +1298,10 @@ function modalFuncionario(id) {
           <div class="grid-2">
             <div class="field"><label>Insalubridade (R$)</label><input id="f-insalubridade" type="text" inputmode="numeric" value="${f ? maskCurrency(f.insalubridade || 0) : ''}" placeholder="R$ 0,00"></div>
             <div class="field"><label>Adicional de Salário (R$)</label><input id="f-adicional-salario" type="text" inputmode="numeric" value="${f ? maskCurrency(f.adicionalSalario || 0) : ''}" placeholder="R$ 0,00"></div>
+          </div>
+          <div class="grid-2">
+            <div class="field"><label>ATS — Adic. por Tempo de Serviço (R$)</label><input id="f-ats" type="text" inputmode="numeric" value="${f ? maskCurrency(f.ats || 0) : ''}" placeholder="R$ 0,00"></div>
+            <div class="field"><label>Data de Nascimento</label><input id="f-nasc" type="date" value="${f ? toInputDate(f.dataNascimento) : ''}"></div>
           </div>
           <div class="grid-2">
             <div class="field"><label>Data de admissão</label><input id="f-adm" type="date" value="${f ? toInputDate(f.dataAdmissao) : ''}"></div>
@@ -1351,10 +1359,11 @@ async function salvarFuncionarioLocal(id) {
 
   const insalubridade = parseCurrency(document.getElementById('f-insalubridade')?.value || '');
   const adicionalSalario = parseCurrency(document.getElementById('f-adicional-salario')?.value || '');
+  const ats = parseCurrency(document.getElementById('f-ats')?.value || '');
 
   const obj = {
     id:           id || '',
-    nome, cpf, cargo, salario, insalubridade, adicionalSalario,
+    nome, cpf, cargo, salario, insalubridade, adicionalSalario, ats,
     endereco:     [
                     document.getElementById('f-end-rua')?.value    || '',
                     document.getElementById('f-end-num')?.value    || '',
@@ -1365,6 +1374,7 @@ async function salvarFuncionarioLocal(id) {
                   ].join('|'),
     telefone:     document.getElementById('f-tel')?.value       || '',
     email:        document.getElementById('f-email')?.value     || '',
+    dataNascimento: document.getElementById('f-nasc')?.value     || '',
     dataAdmissao: document.getElementById('f-adm')?.value       || '',
     dataDemissao: document.getElementById('f-dem')?.value       || '',
     pis:          document.getElementById('f-pis')?.value       || '',
@@ -2317,11 +2327,13 @@ function calcLiquidoFuncionario(f, mes) {
   const lancs = cache.lancamentos.filter(l => l.funcionarioId === f.id && mesDeData(l.competencia || l.mes) === mes);
   const insalubridade = Number(f.insalubridade || 0);
   const adicionalSalario = Number(f.adicionalSalario || 0);
-  let totalProv = Number(f.salario || 0) + insalubridade + adicionalSalario;
+  const ats = Number(f.ats || 0);
+  let totalProv = Number(f.salario || 0) + insalubridade + adicionalSalario + ats;
   let totalDesc = 0;
   const detalhesProv = [{ desc: 'Salário base', val: Number(f.salario || 0) }];
   if (insalubridade > 0) detalhesProv.push({ desc: 'Insalubridade', val: insalubridade });
   if (adicionalSalario > 0) detalhesProv.push({ desc: 'Adicional de Salário', val: adicionalSalario });
+  if (ats > 0) detalhesProv.push({ desc: 'ATS — Adic. por Tempo de Serviço', val: ats });
   const detalhesDesc = [];
 
   lancs.forEach(l => {
@@ -2363,7 +2375,8 @@ function calcLiquidoFuncionarioPeriodo(f, mesIni, mesFim) {
   const numMeses = meses.size;
   const insalubridade = Number(f.insalubridade || 0);
   const adicionalSalario = Number(f.adicionalSalario || 0);
-  const salarioTotal = (Number(f.salario || 0) + insalubridade + adicionalSalario) * numMeses;
+  const ats = Number(f.ats || 0);
+  const salarioTotal = (Number(f.salario || 0) + insalubridade + adicionalSalario + ats) * numMeses;
 
   let totalProv = salarioTotal;
   let totalDesc = 0;
@@ -2424,7 +2437,7 @@ function gerarHoleritePDF() {
     doc.text(f.nome, 15, 49);
     doc.setFontSize(9); doc.setFont('helvetica', 'normal');
     doc.setTextColor(107, 104, 96);
-    const linha1 = `CPF: ${f.cpf || '—'}   |   Cargo: ${f.cargo || '—'}   |   Admissão: ${fmtDate(f.dataAdmissao)}`;
+    const linha1 = `CPF: ${f.cpf || '—'}   |   Cargo: ${f.cargo || '—'}   |   Nasc: ${fmtDate(f.dataNascimento || '')}   |   Admissão: ${fmtDate(f.dataAdmissao)}`;
     doc.text(linha1, 15, 57);
     const linha2 = `Banco: ${f.banco || '—'}   Ag: ${f.agencia || '—'}   Conta: ${f.conta || '—'}   PIX: ${f.pix || '—'}`;
     doc.text(linha2, 15, 63);
@@ -2619,7 +2632,7 @@ function gerarListaFuncionarios() {
     doc.text(f.nome, 15, y);
     doc.setFontSize(8); doc.setFont('helvetica', 'normal');
     doc.setTextColor(107, 104, 96);
-    doc.text(`CPF: ${f.cpf||'—'}  |  Cargo: ${f.cargo||'—'}  |  Admissão: ${fmtDate(f.dataAdmissao)}  |  Salário Base: ${fmt(f.salario)}  |  Insalubridade: ${fmt(f.insalubridade||0)}  |  Adicional: ${fmt(f.adicionalSalario||0)}`, 15, y + 5);
+    doc.text(`CPF: ${f.cpf||'—'}  |  Cargo: ${f.cargo||'—'}  |  Admissão: ${fmtDate(f.dataAdmissao)}  |  Nasc: ${fmtDate(f.dataNascimento||'')}  |  Sal. Base: ${fmt(f.salario)}  |  Insalub.: ${fmt(f.insalubridade||0)}  |  Adicional: ${fmt(f.adicionalSalario||0)}  |  ATS: ${fmt(f.ats||0)}`, 15, y + 5);
     doc.text(`E-mail: ${f.email||'—'}  |  Tel: ${f.telefone||'—'}  |  Banco: ${f.banco||'—'}  Ag: ${f.agencia||'—'}  Conta: ${f.conta||'—'}`, 15, y + 10);
     y += 18;
     if (y > 270) { doc.addPage(); y = 20; }
