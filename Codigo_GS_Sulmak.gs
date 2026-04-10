@@ -9,10 +9,13 @@ const SHEET_ID = SpreadsheetApp.getActiveSpreadsheet().getId();
 // Nomes das abas — altere se necessário
 const ABA_FUNCIONARIOS = 'Funcionarios';
 const ABA_LANCAMENTOS  = 'Lancamentos';
+const ABA_FERIAS       = 'Ferias';
 
 // ── Cabeçalhos das abas ──────────────────────────────────
 const COLS_FUNC = [
-  'id','nome','cpf','cargo','salario','dataAdmissao','dataDemissao',
+  'id','nome','cpf','dataNascimento','cargo','salario','insalubridade','adicionalSalario','ats',
+  'salarioFamilia','auxilioCreche','auxilioCombustivel',
+  'dataAdmissao','dataDemissao',
   'endereco','telefone','email','pis','ctps',
   'banco','agencia','conta','tipoConta','pix','obs'
 ];
@@ -40,6 +43,16 @@ const COLS_LANC = [
   'obs', 'anexoNome', 'anexoBase64'
 ];
 
+const COLS_FERIAS = [
+  // — Identificação —
+  'id', 'funcionarioId', 'funcionarioNome',
+  // — Datas —
+  'dataLancamento', 'periodoInicio', 'periodoFim',
+  // — Verbas de Férias —
+  'salarioFerias', 'insalubridadeFerias', 'adicionalFerias', 'atsFerias',
+  'auxilioCombustivelFerias', 'auxilioCrecheFerias', 'salarioFamiliaFerias'
+];
+
 // ═══════════════════════════════════════════════════════
 //  ENTRY POINT — recebe chamadas do front-end
 // ═══════════════════════════════════════════════════════
@@ -60,6 +73,7 @@ function doPost(e) {
     else if (action === 'deleteFuncionario') result = deleteFuncionario(body.id);
     else if (action === 'saveLancamento')    result = saveLancamento(body.data);
     else if (action === 'deleteLancamento')  result = deleteLancamento(body.id);
+    else if (action === 'saveFerias')        result = saveFerias(body.data);
     else if (action === 'salvarAnexo')       result = salvarAnexoNoDrive(body.nome, body.base64, body.mime);
     else throw new Error('Ação desconhecida: ' + action);
 
@@ -82,33 +96,38 @@ function doGet(e) {
 }
 
 // ═══════════════════════════════════════════════════════
-//  getAll — retorna funcionários + lançamentos
+//  getAll — retorna funcionários + lançamentos + férias
 // ═══════════════════════════════════════════════════════
 function getAll() {
   const funcionarios = lerAba(ABA_FUNCIONARIOS, COLS_FUNC);
   const lancamentos  = lerAba(ABA_LANCAMENTOS,  COLS_LANC);
-  return { funcionarios, lancamentos };
+  const ferias       = lerAba(ABA_FERIAS,        COLS_FERIAS);
+  return { funcionarios, lancamentos, ferias };
 }
 
 // ═══════════════════════════════════════════════════════
 //  saveFuncionario — cria ou atualiza
+//
+//  Usa o cabeçalho REAL da planilha para mapear colunas
+//  por NOME, evitando dados em colunas erradas quando a
+//  planilha teve colunas adicionadas por versão antiga.
 // ═══════════════════════════════════════════════════════
 function saveFuncionario(data) {
   const sheet = getOrCreateSheet(ABA_FUNCIONARIOS, COLS_FUNC);
 
+  const cabecalho = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(String);
+  const rowData   = cabecalho.map(col => data[col] !== undefined ? data[col] : '');
+
   if (!data.id) {
-    // Novo registro
     data.id = gerarId();
-    sheet.appendRow(COLS_FUNC.map(c => data[c] !== undefined ? data[c] : ''));
+    rowData[cabecalho.indexOf('id')] = data.id;
+    sheet.appendRow(rowData);
   } else {
-    // Upsert: atualiza se encontrar, insere se não encontrar (cache dessincronizado)
     const linha = encontrarLinha(sheet, data.id);
     if (linha) {
-      COLS_FUNC.forEach((col, i) => {
-        sheet.getRange(linha, i + 1).setValue(data[col] !== undefined ? data[col] : '');
-      });
+      sheet.getRange(linha, 1, 1, rowData.length).setValues([rowData]);
     } else {
-      sheet.appendRow(COLS_FUNC.map(c => data[c] !== undefined ? data[c] : ''));
+      sheet.appendRow(rowData);
     }
   }
   return { id: data.id };
@@ -128,15 +147,13 @@ function deleteFuncionario(id) {
 // ═══════════════════════════════════════════════════════
 //  saveLancamento — cria ou atualiza (upsert)
 //  Se o ID existir na planilha → atualiza a linha.
-//  Se o ID NÃO existir (cache local dessincronizado) → insere como novo registro.
+//  Se o ID NÃO existir → insere como novo registro.
 // ═══════════════════════════════════════════════════════
 function saveLancamento(data) {
   const sheet = getOrCreateSheet(ABA_LANCAMENTOS, COLS_LANC);
 
-  // Lê o cabeçalho real da planilha (pode ter colunas em ordem diferente)
   const cabecalho = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(String);
-
-  const rowData = cabecalho.map(col => data[col] !== undefined ? data[col] : '');
+  const rowData   = cabecalho.map(col => data[col] !== undefined ? data[col] : '');
 
   if (!data.id) {
     data.id = gerarId();
@@ -165,6 +182,42 @@ function deleteLancamento(id) {
 }
 
 // ═══════════════════════════════════════════════════════
+//  saveFerias — cria ou atualiza registro de férias
+//
+//  A lógica de "criar novo vs atualizar" é controlada
+//  pelo front-end (HTML):
+//    • Período novo  → front envia um ID novo → aqui INSERE
+//    • Mesmo período → front envia o ID existente → aqui ATUALIZA
+//
+//  Dessa forma a aba Ferias funciona como histórico
+//  completo: cada período diferente fica em uma linha
+//  própria, nunca sobrescrevendo períodos anteriores.
+// ═══════════════════════════════════════════════════════
+function saveFerias(data) {
+  const sheet = getOrCreateSheet(ABA_FERIAS, COLS_FERIAS);
+
+  const cabecalho = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(String);
+  const rowData   = cabecalho.map(col => data[col] !== undefined ? data[col] : '');
+
+  if (!data.id) {
+    // Sem ID → novo registro
+    data.id = gerarId();
+    rowData[cabecalho.indexOf('id')] = data.id;
+    sheet.appendRow(rowData);
+  } else {
+    const linha = encontrarLinha(sheet, data.id);
+    if (linha) {
+      // ID já existe → atualiza (mesmo período, valores corrigidos)
+      sheet.getRange(linha, 1, 1, rowData.length).setValues([rowData]);
+    } else {
+      // ID não encontrado → insere como novo (período novo)
+      sheet.appendRow(rowData);
+    }
+  }
+  return { id: data.id };
+}
+
+// ═══════════════════════════════════════════════════════
 //  UTILITÁRIOS
 // ═══════════════════════════════════════════════════════
 
@@ -182,13 +235,12 @@ function lerAba(nomAba, colunas) {
 }
 
 /** Retorna a aba, criando-a (com cabeçalho) se não existir.
- *  Se já existir mas o cabeçalho estiver desatualizado, adiciona as colunas novas no final. */
+ *  Se já existir mas o cabeçalho estiver desatualizado, adiciona colunas novas no final. */
 function getOrCreateSheet(nome, colunas) {
   const ss  = SpreadsheetApp.getActiveSpreadsheet();
   let sheet = ss.getSheetByName(nome);
 
   if (!sheet) {
-    // Cria a aba do zero
     sheet = ss.insertSheet(nome);
     sheet.appendRow(colunas);
     const range = sheet.getRange(1, 1, 1, colunas.length);
@@ -197,8 +249,7 @@ function getOrCreateSheet(nome, colunas) {
     range.setFontColor('#FFFFFF');
     sheet.setFrozenRows(1);
   } else {
-    // Aba já existe — verifica se faltam colunas novas
-    const cabecalhoAtual = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(String);
+    const cabecalhoAtual  = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(String);
     const colunasFaltando = colunas.filter(c => !cabecalhoAtual.includes(c));
     if (colunasFaltando.length > 0) {
       colunasFaltando.forEach(col => {
@@ -230,11 +281,10 @@ function migrarCabecalhos() {
   const sheet = ss.getSheetByName(ABA_LANCAMENTOS);
   if (!sheet) { Logger.log('Aba Lancamentos não encontrada.'); return; }
 
-  // Percorre COLS_LANC na ordem e insere colunas faltando na posição certa
   COLS_LANC.forEach((col, idxDesejado) => {
     const cabecalhoAtual = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(String);
     if (!cabecalhoAtual.includes(col)) {
-      const insertAt = idxDesejado + 1; // 1-based
+      const insertAt = idxDesejado + 1;
       sheet.insertColumnBefore(insertAt);
       const cell = sheet.getRange(1, insertAt);
       cell.setValue(col);
@@ -243,7 +293,67 @@ function migrarCabecalhos() {
     }
   });
 
-  Logger.log('Migração concluída!');
+  Logger.log('Migração de Lançamentos concluída!');
+}
+
+// ═══════════════════════════════════════════════════════
+//  migrarCabecalhosFuncionarios — rode UMA VEZ para
+//  reorganizar as colunas da aba Funcionarios na ordem
+//  correta de COLS_FUNC.
+// ═══════════════════════════════════════════════════════
+function migrarCabecalhosFuncionarios() {
+  const ss    = SpreadsheetApp.getActiveSpreadsheet();
+  const sheet = ss.getSheetByName(ABA_FUNCIONARIOS);
+  if (!sheet) { Logger.log('Aba Funcionarios não encontrada.'); return; }
+
+  COLS_FUNC.forEach((col, idxDesejado) => {
+    const cabecalhoAtual = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(String);
+    if (!cabecalhoAtual.includes(col)) {
+      const insertAt = idxDesejado + 1;
+      sheet.insertColumnBefore(insertAt);
+      const cell = sheet.getRange(1, insertAt);
+      cell.setValue(col);
+      cell.setFontWeight('bold').setBackground('#1B4F8A').setFontColor('#FFFFFF');
+      Logger.log('Coluna inserida: ' + col + ' na posição ' + insertAt);
+    }
+  });
+
+  Logger.log('Migração de Funcionários concluída!');
+}
+
+// ═══════════════════════════════════════════════════════
+//  migrarCabecalhosFerias — rode UMA VEZ para criar /
+//  reorganizar a aba Ferias com todas as colunas corretas.
+// ═══════════════════════════════════════════════════════
+function migrarCabecalhosFerias() {
+  const ss    = SpreadsheetApp.getActiveSpreadsheet();
+  let   sheet = ss.getSheetByName(ABA_FERIAS);
+
+  if (!sheet) {
+    // Aba não existe → cria do zero
+    sheet = ss.insertSheet(ABA_FERIAS);
+    sheet.appendRow(COLS_FERIAS);
+    const range = sheet.getRange(1, 1, 1, COLS_FERIAS.length);
+    range.setFontWeight('bold').setBackground('#1B4F8A').setFontColor('#FFFFFF');
+    sheet.setFrozenRows(1);
+    Logger.log('Aba Ferias criada com sucesso!');
+    return;
+  }
+
+  // Aba existe → insere colunas faltando na posição correta
+  COLS_FERIAS.forEach((col, idxDesejado) => {
+    const cabecalhoAtual = sheet.getRange(1, 1, 1, sheet.getLastColumn()).getValues()[0].map(String);
+    if (!cabecalhoAtual.includes(col)) {
+      const insertAt = idxDesejado + 1;
+      sheet.insertColumnBefore(insertAt);
+      const cell = sheet.getRange(1, insertAt);
+      cell.setValue(col);
+      cell.setFontWeight('bold').setBackground('#1B4F8A').setFontColor('#FFFFFF');
+      Logger.log('Coluna inserida: ' + col + ' na posição ' + insertAt);
+    }
+  });
+
+  Logger.log('Migração de Férias concluída!');
 }
 
 /** Gera um ID único */
@@ -256,7 +366,6 @@ function gerarId() {
 //  e retorna o link de visualização
 // ═══════════════════════════════════════════════════════
 function salvarAnexoNoDrive(nome, base64, mime) {
-  // Usa (ou cria) uma pasta "Sulmak_Anexos" no Drive
   const PASTA_NOME = 'Sulmak_Anexos';
   let folder;
   const folders = DriveApp.getFoldersByName(PASTA_NOME);
@@ -270,7 +379,6 @@ function salvarAnexoNoDrive(nome, base64, mime) {
   const blob  = Utilities.newBlob(bytes, mime || 'application/octet-stream', nome);
   const file  = folder.createFile(blob);
 
-  // Permite que qualquer pessoa com o link visualize o arquivo
   file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
 
   return { url: file.getUrl(), fileId: file.getId() };
