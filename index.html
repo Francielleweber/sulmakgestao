@@ -670,7 +670,8 @@ const CONFIG_KEY = 'folhapay_config';
 const CACHE_KEY  = 'folhapay_cache';
 
 let config = JSON.parse(localStorage.getItem(CONFIG_KEY) || '{}');
-let cache  = JSON.parse(localStorage.getItem(CACHE_KEY)  || '{"funcionarios":[],"lancamentos":[]}');
+let cache  = JSON.parse(localStorage.getItem(CACHE_KEY)  || '{"funcionarios":[],"lancamentos":[],"ferias":[]}');
+if (!cache.ferias) cache.ferias = [];
 
 function saveConfig() { localStorage.setItem(CONFIG_KEY, JSON.stringify(config)); }
 function saveCache() {
@@ -733,6 +734,14 @@ async function syncAll() {
       };
     });
 
+    // Normaliza férias
+    cache.ferias = (r.ferias || []).map(fe => ({
+      ...fe,
+      periodoInicio: toInputDate(fe.periodoInicio),
+      periodoFim: toInputDate(fe.periodoFim),
+      dataLancamento: toInputDate(fe.dataLancamento),
+    }));
+
     saveCache();
     updateGSStatus(true);
     showToast('✓ Sincronizado com sucesso!', 'ok');
@@ -760,6 +769,11 @@ async function saveLancamento(obj) {
 
 async function deleteLancamento(id) {
   const r = await gsCall('deleteLancamento', { id });
+  return r;
+}
+
+async function saveFerias(obj) {
+  const r = await gsCall('saveFerias', { data: obj });
   return r;
 }
 
@@ -1018,7 +1032,7 @@ async function testarConexao() {
 
 function limparCache() {
   if (!confirm('Limpar todos os dados do cache local? Os dados no Sheets não serão afetados.')) return;
-  cache = { funcionarios: [], lancamentos: [] };
+  cache = { funcionarios: [], lancamentos: [], ferias: [] };
   saveCache();
   showToast('Cache limpo.', 'ok');
   render('config');
@@ -1076,7 +1090,7 @@ function renderFuncTabela(busca) {
     const matchSituacao = situacao === 'todos' || (situacao === 'ativos' && ativo) || (situacao === 'inativos' && !ativo);
     const matchBusca = !b || f.nome.toLowerCase().includes(b) || (f.cpf||'').includes(b) || (f.cargo||'').toLowerCase().includes(b);
     return matchSituacao && matchBusca;
-  });
+  }).sort((a, b) => (a.nome || '').localeCompare(b.nome || '', 'pt-BR'));
   const tbody = document.getElementById('tbody-func');
   if (!tbody) return;
   if (!lista.length) {
@@ -1251,10 +1265,23 @@ function initFuncionarioMasks() {
   applyMaskCurrency('f-auxilio-combustivel');
 }
 
+function initFeriasMasks() {
+  applyMaskCurrency('f-ferias-salario');
+  applyMaskCurrency('f-ferias-insalubridade');
+  applyMaskCurrency('f-ferias-adicional');
+  applyMaskCurrency('f-ferias-ats');
+  applyMaskCurrency('f-ferias-combustivel');
+  applyMaskCurrency('f-ferias-creche');
+  applyMaskCurrency('f-ferias-salario-familia');
+}
+
 function modalFuncionario(id) {
   const f = id ? cache.funcionarios.find(x => x.id === id) : null;
+  // Busca o último registro de férias deste funcionário
+  const ultimasFerias = id ? cache.ferias.filter(fe => fe.funcionarioId === id).sort((a,b) => (b.dataLancamento||'').localeCompare(a.dataLancamento||''))[0] : null;
+
   const modal = openModal(`
-    <div class="modal">
+    <div class="modal" style="width:720px;">
       <div class="modal-header">
         <h3>${f ? 'Editar Funcionário' : 'Novo Funcionário'}</h3>
         <button class="btn btn-icon" onclick="closeModal()">✕</button>
@@ -1264,6 +1291,8 @@ function modalFuncionario(id) {
           <div class="tab active" onclick="switchTab(this,'tp')">Pessoal</div>
           <div class="tab" onclick="switchTab(this,'tp2')">Profissional</div>
           <div class="tab" onclick="switchTab(this,'tp3')">Bancário</div>
+          <div class="tab" onclick="switchTab(this,'tp4')">Férias</div>
+          <div class="tab" onclick="switchTab(this,'tp5')">Anotações</div>
         </div>
 
         <div id="tp">
@@ -1337,6 +1366,64 @@ function modalFuncionario(id) {
             <div class="field"><label>Chave PIX</label><input id="f-pix" value="${f ? esc(f.pix||'') : ''}" placeholder="CPF / e-mail / tel"></div>
           </div>
         </div>
+
+        <div id="tp4" style="display:none;">
+          <div class="info-banner" style="margin-bottom:14px;">
+            🏖️ <span>Registre os dados de férias.</span>
+          </div>
+          <div class="section-divider">Período de Férias</div>
+          <div class="grid-2">
+            <div class="field"><label>Início do Período</label><input id="f-ferias-ini" type="date" value="${ultimasFerias ? toInputDate(ultimasFerias.periodoInicio) : ''}"></div>
+            <div class="field"><label>Fim do Período</label><input id="f-ferias-fim" type="date" value="${ultimasFerias ? toInputDate(ultimasFerias.periodoFim) : ''}"></div>
+          </div>
+          <div class="section-divider">Verbas de Férias</div>
+          <div class="grid-2">
+            <div class="field"><label>Salário Férias (R$)</label><input id="f-ferias-salario" type="text" inputmode="numeric" value="${ultimasFerias ? maskCurrency(ultimasFerias.salarioFerias || 0) : ''}" placeholder="R$ 0,00"></div>
+            <div class="field"><label>Insalubridade (Férias) (R$)</label><input id="f-ferias-insalubridade" type="text" inputmode="numeric" value="${ultimasFerias ? maskCurrency(ultimasFerias.insalubridadeFerias || 0) : ''}" placeholder="R$ 0,00"></div>
+          </div>
+          <div class="grid-2">
+            <div class="field"><label>Adc. Salário (Férias) (R$)</label><input id="f-ferias-adicional" type="text" inputmode="numeric" value="${ultimasFerias ? maskCurrency(ultimasFerias.adicionalFerias || 0) : ''}" placeholder="R$ 0,00"></div>
+            <div class="field"><label>ATS (Férias) (R$)</label><input id="f-ferias-ats" type="text" inputmode="numeric" value="${ultimasFerias ? maskCurrency(ultimasFerias.atsFerias || 0) : ''}" placeholder="R$ 0,00"></div>
+          </div>
+          <div class="grid-3">
+            <div class="field"><label>Aux. Combustível (Férias) (R$)</label><input id="f-ferias-combustivel" type="text" inputmode="numeric" value="${ultimasFerias ? maskCurrency(ultimasFerias.auxilioCombustivelFerias || 0) : ''}" placeholder="R$ 0,00"></div>
+            <div class="field"><label>Aux. Creche (Férias) (R$)</label><input id="f-ferias-creche" type="text" inputmode="numeric" value="${ultimasFerias ? maskCurrency(ultimasFerias.auxilioCrecheFerias || 0) : ''}" placeholder="R$ 0,00"></div>
+            <div class="field"><label>Salário Família (Férias) (R$)</label><input id="f-ferias-salario-familia" type="text" inputmode="numeric" value="${ultimasFerias ? maskCurrency(ultimasFerias.salarioFamiliaFerias || 0) : ''}" placeholder="R$ 0,00"></div>
+          </div>
+          ${id && cache.ferias.filter(fe => fe.funcionarioId === id).length > 0 ? `
+          <div class="section-divider">Histórico de Lançamentos de Férias</div>
+          <div style="border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;max-height:200px;overflow-y:auto;">
+            <table style="width:100%;border-collapse:collapse;">
+              <thead><tr style="background:var(--bg);">
+                <th style="padding:8px;text-align:left;font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;">Data Lanç.</th>
+                <th style="padding:8px;text-align:left;font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;">Período</th>
+                <th style="padding:8px;text-align:left;font-size:11px;color:var(--text3);font-weight:600;text-transform:uppercase;">Sal. Férias</th>
+              </tr></thead>
+              <tbody>
+                ${cache.ferias.filter(fe => fe.funcionarioId === id).sort((a,b) => (b.dataLancamento||'').localeCompare(a.dataLancamento||'')).map(fe => `
+                  <tr>
+                    <td style="padding:8px;font-size:12px;font-family:'DM Mono',monospace;">${fmtDate(fe.dataLancamento)}</td>
+                    <td style="padding:8px;font-size:12px;">${fmtDate(fe.periodoInicio)} — ${fmtDate(fe.periodoFim)}</td>
+                    <td style="padding:8px;font-size:12px;font-family:'DM Mono',monospace;">${fmt(fe.salarioFerias||0)}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
+          ` : ''}
+        </div>
+
+        <div id="tp5" style="display:none;">
+          <div class="info-banner" style="margin-bottom:14px;">
+            📝 <span>Use este espaço para registrar observações internas, advertências, ocorrências ou qualquer anotação relevante sobre o colaborador.</span>
+          </div>
+          <div class="field">
+            <label>Anotações internas</label>
+            <textarea id="f-obs" rows="10" placeholder="Digite aqui suas anotações sobre o funcionário..." style="min-height:220px;font-size:13px;line-height:1.6;">${f ? esc(f.obs||'') : ''}</textarea>
+          </div>
+          <div style="font-size:11px;color:var(--text3);margin-top:-6px;">Estas anotações são salvas junto ao cadastro e visíveis apenas internamente.</div>
+        </div>
+
       </div>
       <div class="modal-footer">
         <button class="btn" onclick="closeModal()">Cancelar</button>
@@ -1347,12 +1434,13 @@ function modalFuncionario(id) {
     </div>
   `);
   initFuncionarioMasks();
+  initFeriasMasks();
 }
 
 function switchTab(el, targetId) {
   el.closest('.modal-body').querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
   el.classList.add('active');
-  ['tp','tp2','tp3'].forEach(id => {
+  ['tp','tp2','tp3','tp4','tp5'].forEach(id => {
     const el2 = document.getElementById(id);
     if (el2) el2.style.display = id === targetId ? 'block' : 'none';
   });
@@ -1396,6 +1484,7 @@ async function salvarFuncionarioLocal(id) {
     conta:        document.getElementById('f-conta')?.value     || '',
     tipoConta:    document.getElementById('f-tipo-conta')?.value || 'corrente',
     pix:          document.getElementById('f-pix')?.value       || '',
+    obs:          document.getElementById('f-obs')?.value       || '',
   };
 
   if (config.gsUrl) {
@@ -1419,6 +1508,59 @@ async function salvarFuncionarioLocal(id) {
   } else {
     cache.funcionarios.push(obj);
   }
+
+  // ── Salvar Férias (sempre que houver período preenchido, gera novo lançamento) ──
+  const feriasIni  = document.getElementById('f-ferias-ini')?.value || '';
+  const feriasFim  = document.getElementById('f-ferias-fim')?.value || '';
+  if (feriasIni || feriasFim) {
+    const salarioFerias        = parseCurrency(document.getElementById('f-ferias-salario')?.value || '');
+    const insalubridadeFerias  = parseCurrency(document.getElementById('f-ferias-insalubridade')?.value || '');
+    const adicionalFerias      = parseCurrency(document.getElementById('f-ferias-adicional')?.value || '');
+    const atsFerias            = parseCurrency(document.getElementById('f-ferias-ats')?.value || '');
+    const auxilioCombustivelFerias = parseCurrency(document.getElementById('f-ferias-combustivel')?.value || '');
+    const auxilioCrecheFerias  = parseCurrency(document.getElementById('f-ferias-creche')?.value || '');
+    const salarioFamiliaFerias = parseCurrency(document.getElementById('f-ferias-salario-familia')?.value || '');
+
+    // Verifica se o período mudou em relação ao último lançamento
+    const ultimasFerias = cache.ferias.filter(fe => fe.funcionarioId === obj.id)
+      .sort((a,b) => (b.dataLancamento||'').localeCompare(a.dataLancamento||''))[0];
+    const periodoMudou = !ultimasFerias || ultimasFerias.periodoInicio !== feriasIni || ultimasFerias.periodoFim !== feriasFim;
+
+    if (periodoMudou) {
+      const objFerias = {
+        id:                     uid(),
+        funcionarioId:          obj.id,
+        funcionarioNome:        obj.nome,
+        dataLancamento:         new Date().toISOString().slice(0,10),
+        periodoInicio:          feriasIni,
+        periodoFim:             feriasFim,
+        salarioFerias,
+        insalubridadeFerias,
+        adicionalFerias,
+        atsFerias,
+        auxilioCombustivelFerias,
+        auxilioCrecheFerias,
+        salarioFamiliaFerias,
+      };
+      if (config.gsUrl) {
+        try { await saveFerias(objFerias); } catch(e) { showToast('Aviso: férias salvas localmente apenas.', 'ok'); }
+      }
+      cache.ferias.push(objFerias);
+    } else if (ultimasFerias) {
+      // Período igual: atualiza os valores do último lançamento (não cria novo)
+      ultimasFerias.salarioFerias = salarioFerias;
+      ultimasFerias.insalubridadeFerias = insalubridadeFerias;
+      ultimasFerias.adicionalFerias = adicionalFerias;
+      ultimasFerias.atsFerias = atsFerias;
+      ultimasFerias.auxilioCombustivelFerias = auxilioCombustivelFerias;
+      ultimasFerias.auxilioCrecheFerias = auxilioCrecheFerias;
+      ultimasFerias.salarioFamiliaFerias = salarioFamiliaFerias;
+      if (config.gsUrl) {
+        try { await saveFerias(ultimasFerias); } catch(e) { /* ignora */ }
+      }
+    }
+  }
+
   saveCache();
   closeModal();
   renderFuncTabela(document.getElementById('busca-func')?.value || '');
@@ -1460,6 +1602,7 @@ async function excluirFuncionario(id) {
   }
   cache.funcionarios = cache.funcionarios.filter(f => f.id !== id);
   cache.lancamentos  = cache.lancamentos.filter(l => l.funcionarioId !== id);
+  cache.ferias       = cache.ferias.filter(fe => fe.funcionarioId !== id);
   saveCache();
   renderFuncTabela(document.getElementById('busca-func')?.value || '');
   showToast('Funcionário excluído.', 'ok');
@@ -1523,7 +1666,7 @@ function renderLancamentos(c) {
         <label style="font-size:13px;color:var(--text2);font-weight:500;">Funcionário:</label>
         <select id="sel-func-lanc" style="flex:1;padding:7px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);font-size:13px;font-family:'DM Sans',sans-serif;" onchange="renderLancArea()">
           <option value="">Todos</option>
-          ${cache.funcionarios.map(f => `<option value="${f.id}">${f.nome}</option>`).join('')}
+          ${[...cache.funcionarios].sort((a,b) => (a.nome||'').localeCompare(b.nome||'','pt-BR')).map(f => `<option value="${f.id}">${f.nome}</option>`).join('')}
         </select>
       </div>
       <button class="btn" onclick="modalCopiarTodos()" title="Copiar todos os lançamentos do mês para outra competência">⎘ Copiar mês</button>
@@ -1774,8 +1917,9 @@ async function executarCopia() {
 
 function modalLancamento(id, preFuncId, lancamentoExistente) {
   const mes = document.getElementById('sel-mes')?.value || new Date().toISOString().slice(0, 7);
-  const funcOptions = cache.funcionarios
+  const funcOptions = [...cache.funcionarios]
     .filter(f => !f.dataDemissao || f.dataDemissao === '')
+    .sort((a,b) => (a.nome||'').localeCompare(b.nome||'','pt-BR'))
     .map(f => `<option value="${f.id}" ${f.id === (preFuncId || (lancamentoExistente && lancamentoExistente.funcionarioId)) ? 'selected' : ''}>${f.nome}</option>`)
     .join('');
 
@@ -1863,11 +2007,11 @@ function modalLancamento(id, preFuncId, lancamentoExistente) {
   `);
 
   // Init
-  switchCategoria(catInicial);
+  switchCategoria(catInicial, tipoInicial);
   onTipoChange(tipoInicial, mes, l);
 }
 
-window.switchCategoria = function(cat) {
+window.switchCategoria = function(cat, tipoFixo) {
   const btnE = document.getElementById('cat-btn-entrada');
   const btnS = document.getElementById('cat-btn-saida');
   const ogE  = document.getElementById('optgroup-entrada');
@@ -1879,12 +2023,12 @@ window.switchCategoria = function(cat) {
     btnE.style.background = 'var(--green)'; btnE.style.color = 'white';
     btnS.style.background = 'var(--surface)'; btnS.style.color = 'var(--text2)';
     ogE.style.display = ''; ogS.style.display = 'none';
-    sel.value = TIPOS_ENTRADA[0];
+    sel.value = tipoFixo || TIPOS_ENTRADA[0];
   } else {
     btnS.style.background = 'var(--red)'; btnS.style.color = 'white';
     btnE.style.background = 'var(--surface)'; btnE.style.color = 'var(--text2)';
     ogS.style.display = ''; ogE.style.display = 'none';
-    sel.value = TIPOS_SAIDA[0];
+    sel.value = tipoFixo || TIPOS_SAIDA[0];
   }
   const mes = document.getElementById('l-comp-top')?.value || new Date().toISOString().slice(0,7);
   onTipoChange(sel.value, mes);
@@ -1937,14 +2081,26 @@ window.onTipoChange = function(tipo, mes, dadosExistentes) {
         </div>
       </div>`;
   } else if (tipo === 'Vale Transporte') {
-    const vt6 = salBase > 0 ? (salBase * 0.06).toFixed(2) : '';
+    // Busca salário de férias do funcionário (último registro)
+    const ultimasFerias = cache.ferias.filter(fe => fe.funcionarioId === funcId).sort((a,b) => (b.dataLancamento||'').localeCompare(a.dataLancamento||''))[0];
+    const salFerias = Number(ultimasFerias?.salarioFerias || 0);
+    const baseVTAtual = d.baseCalcVT || 'base';
+    const salChoosen = baseVTAtual === 'ferias' ? salFerias : salBase;
+    const vt6 = salChoosen > 0 ? (salChoosen * 0.06).toFixed(2) : '';
     area.innerHTML = `
       <div style="background:var(--red-bg);border:1px solid #e8b4b4;border-radius:var(--radius-sm);padding:14px 16px;margin-bottom:14px;">
-        <div style="font-size:11px;font-weight:600;color:var(--red);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.05em;">↓ Vale Transporte — 6% do Salário Base</div>
+        <div style="font-size:11px;font-weight:600;color:var(--red);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.05em;">↓ Vale Transporte — 6% do Salário</div>
+        <div class="field" style="margin-bottom:10px;">
+          <label>Base de cálculo do Vale Transporte</label>
+          <select id="l-base-calc-vt" onchange="recalcVT()" style="padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);font-size:13px;font-family:'DM Sans',sans-serif;width:100%;">
+            <option value="base" ${baseVTAtual==='base'?'selected':''}>Salário Base</option>
+            <option value="ferias" ${baseVTAtual==='ferias'?'selected':''}>Salário Férias</option>
+          </select>
+        </div>
         <div class="grid-2">
           <div class="field">
-            <label>Salário base do funcionário</label>
-            <input type="text" value="${fmt(salBase)}" readonly style="background:var(--surface2);color:var(--text2);">
+            <label id="l-vt-sal-label">Salário base do funcionário</label>
+            <input id="l-vt-sal-ref" type="text" value="${fmt(salChoosen)}" readonly style="background:var(--surface2);color:var(--text2);">
           </div>
           <div class="field">
             <label>Valor a descontar (6%)</label>
@@ -2053,6 +2209,25 @@ function reaisToMask(v) {
   return `R$ ${reaisFormatted},${centsPart}`;
 }
 
+window.recalcVT = function() {
+  const sel = document.getElementById('l-base-calc-vt');
+  if (!sel) return;
+  const base = sel.value;
+  const funcId = document.getElementById('l-func')?.value;
+  const f = cache.funcionarios.find(x => x.id === funcId);
+  const salBase = Number(f?.salario || 0);
+  const ultimasFerias = cache.ferias.filter(fe => fe.funcionarioId === funcId).sort((a,b) => (b.dataLancamento||'').localeCompare(a.dataLancamento||''))[0];
+  const salFerias = Number(ultimasFerias?.salarioFerias || 0);
+  const salRef = base === 'ferias' ? salFerias : salBase;
+  const label = document.getElementById('l-vt-sal-label');
+  const refInput = document.getElementById('l-vt-sal-ref');
+  const valorInput = document.getElementById('l-valor');
+  if (label) label.textContent = base === 'ferias' ? 'Salário férias do funcionário' : 'Salário base do funcionário';
+  if (refInput) refInput.value = fmt(salRef);
+  const vt6 = salRef > 0 ? (salRef * 0.06) : 0;
+  if (valorInput) valorInput.value = reaisToMask(vt6);
+};
+
 window.calcHoraExtra = function() {
   const qtd = parseFloat(document.getElementById('l-qtd-horas')?.value || 0);
   const vh  = parseCurrency(document.getElementById('l-valor-hora')?.value || '0');
@@ -2136,6 +2311,7 @@ async function salvarLancamentoLocal(mes, editId) {
   const totalEmprestimo= parseCurrency(document.getElementById('l-total-emp')?.value    || '0') || '';
   const totalParcelas  = document.getElementById('l-parcelas')?.value || '';
   const qtdFaltas      = document.getElementById('l-qtd-faltas')?.value || '';
+  const baseCalcVT     = document.getElementById('l-base-calc-vt')?.value || 'base';
 
   if (tipo === 'Hora Extra') valor = parseCurrency(document.getElementById('l-valor-he')?.value || '0') || '';
 
@@ -2161,6 +2337,7 @@ async function salvarLancamentoLocal(mes, editId) {
       ? `Parcela 1/${totalParcelas}${document.getElementById('l-obs')?.value ? ' — ' + document.getElementById('l-obs').value : ''}`
       : document.getElementById('l-obs')?.value || '',
     qtdFaltas,
+    baseCalcVT,
     unidade: tipo === 'Hora Extra' ? 'h' : tipo === 'Falta' ? 'd' : '',
     justificado:  '',
     anexoNome:   novoAnexo?.nome || (editId ? cache.lancamentos.find(l=>l.id===editId)?.anexoNome||'' : ''),
@@ -2280,6 +2457,7 @@ window.abrirAnexo = function(id) {
 // ═══════════════════════════════════════════════════════
 function renderHolerite(c) {
   const mesAtual = new Date().toISOString().slice(0, 7);
+  const funcsOrdenados = [...cache.funcionarios].sort((a,b) => (a.nome||'').localeCompare(b.nome||'','pt-BR'));
   c.innerHTML = `
     <div class="card" style="max-width:700px;">
       <div class="card-header"><h3>Gerar Holerite / Relatório PDF</h3></div>
@@ -2289,12 +2467,25 @@ function renderHolerite(c) {
             <label>Funcionário</label>
             <select id="rel-func">
               <option value="">Todos os ativos</option>
-              ${cache.funcionarios.map(f => `<option value="${f.id}">${f.nome}</option>`).join('')}
+              ${funcsOrdenados.map(f => `<option value="${f.id}">${f.nome}</option>`).join('')}
             </select>
           </div>
           <div class="field">
             <label>Mês de referência (Holerite)</label>
             <input type="month" id="rel-mes" value="${mesAtual}">
+          </div>
+        </div>
+        <div style="border-top:1px solid var(--border);margin:10px 0 14px;padding-top:14px;">
+          <div style="font-size:12px;font-weight:600;color:var(--text2);margin-bottom:10px;text-transform:uppercase;letter-spacing:0.05em;">Modo de Lançamentos para o Holerite</div>
+          <div class="field">
+            <label>Lançamentos de entrada a utilizar no cálculo do líquido</label>
+            <select id="rel-modo-lanc" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);font-size:13px;font-family:'DM Sans',sans-serif;">
+              <option value="normal">Lançamentos Normais (guia Profissional)</option>
+              <option value="ferias">Lançamentos de Férias (guia Férias)</option>
+            </select>
+          </div>
+          <div style="font-size:12px;color:var(--text3);margin-top:6px;margin-bottom:14px;">
+            Os lançamentos individuais aparecem normalmente no holerite. Esta opção define quais verbas base (salário, insalubridade, ATS, etc.) entram no cálculo do valor líquido.
           </div>
         </div>
         <div style="border-top:1px solid var(--border);margin:10px 0 14px;padding-top:14px;">
@@ -2335,23 +2526,46 @@ function renderHolerite(c) {
   `;
 }
 
-function calcLiquidoFuncionario(f, mes) {
+function calcLiquidoFuncionario(f, mes, modoLanc) {
+  // modoLanc: 'normal' (padrão) ou 'ferias'
+  const modo = modoLanc || 'normal';
   const lancs = cache.lancamentos.filter(l => l.funcionarioId === f.id && mesDeData(l.competencia || l.mes) === mes);
-  const insalubridade = Number(f.insalubridade || 0);
-  const adicionalSalario = Number(f.adicionalSalario || 0);
-  const ats = Number(f.ats || 0);
-  const salarioFamilia = Number(f.salarioFamilia || 0);
-  const auxilioCreche = Number(f.auxilioCreche || 0);
-  const auxilioCombustivel = Number(f.auxilioCombustivel || 0);
-  let totalProv = Number(f.salario || 0) + insalubridade + adicionalSalario + ats + salarioFamilia + auxilioCreche + auxilioCombustivel;
+
+  let salarioBase, insalubridade, adicionalSalario, ats, salarioFamilia, auxilioCreche, auxilioCombustivel;
+  let labelSalario;
+
+  if (modo === 'ferias') {
+    // Usa o último registro de férias do funcionário
+    const ultimasFerias = cache.ferias.filter(fe => fe.funcionarioId === f.id)
+      .sort((a,b) => (b.dataLancamento||'').localeCompare(a.dataLancamento||''))[0] || {};
+    salarioBase        = Number(ultimasFerias.salarioFerias || 0);
+    insalubridade      = Number(ultimasFerias.insalubridadeFerias || 0);
+    adicionalSalario   = Number(ultimasFerias.adicionalFerias || 0);
+    ats                = Number(ultimasFerias.atsFerias || 0);
+    salarioFamilia     = Number(ultimasFerias.salarioFamiliaFerias || 0);
+    auxilioCreche      = Number(ultimasFerias.auxilioCrecheFerias || 0);
+    auxilioCombustivel = Number(ultimasFerias.auxilioCombustivelFerias || 0);
+    labelSalario       = 'Salário Férias';
+  } else {
+    salarioBase        = Number(f.salario || 0);
+    insalubridade      = Number(f.insalubridade || 0);
+    adicionalSalario   = Number(f.adicionalSalario || 0);
+    ats                = Number(f.ats || 0);
+    salarioFamilia     = Number(f.salarioFamilia || 0);
+    auxilioCreche      = Number(f.auxilioCreche || 0);
+    auxilioCombustivel = Number(f.auxilioCombustivel || 0);
+    labelSalario       = 'Salário base';
+  }
+
+  let totalProv = salarioBase + insalubridade + adicionalSalario + ats + salarioFamilia + auxilioCreche + auxilioCombustivel;
   let totalDesc = 0;
-  const detalhesProv = [{ desc: 'Salário base', val: Number(f.salario || 0) }];
-  if (insalubridade > 0) detalhesProv.push({ desc: 'Insalubridade', val: insalubridade });
-  if (adicionalSalario > 0) detalhesProv.push({ desc: 'Adicional de Salário', val: adicionalSalario });
-  if (ats > 0) detalhesProv.push({ desc: 'ATS — Adic. por Tempo de Serviço', val: ats });
-  if (salarioFamilia > 0) detalhesProv.push({ desc: 'Salário Família', val: salarioFamilia });
-  if (auxilioCreche > 0) detalhesProv.push({ desc: 'Auxílio Creche', val: auxilioCreche });
-  if (auxilioCombustivel > 0) detalhesProv.push({ desc: 'Auxílio Combustível', val: auxilioCombustivel });
+  const detalhesProv = [{ desc: labelSalario, val: salarioBase }];
+  if (insalubridade > 0) detalhesProv.push({ desc: modo === 'ferias' ? 'Insalubridade (Férias)' : 'Insalubridade', val: insalubridade });
+  if (adicionalSalario > 0) detalhesProv.push({ desc: modo === 'ferias' ? 'Adc. Salário (Férias)' : 'Adicional de Salário', val: adicionalSalario });
+  if (ats > 0) detalhesProv.push({ desc: modo === 'ferias' ? 'ATS (Férias)' : 'ATS — Adic. por Tempo de Serviço', val: ats });
+  if (salarioFamilia > 0) detalhesProv.push({ desc: modo === 'ferias' ? 'Salário Família (Férias)' : 'Salário Família', val: salarioFamilia });
+  if (auxilioCreche > 0) detalhesProv.push({ desc: modo === 'ferias' ? 'Aux. Creche (Férias)' : 'Auxílio Creche', val: auxilioCreche });
+  if (auxilioCombustivel > 0) detalhesProv.push({ desc: modo === 'ferias' ? 'Aux. Combustível (Férias)' : 'Auxílio Combustível', val: auxilioCombustivel });
   const detalhesDesc = [];
 
   lancs.forEach(l => {
@@ -2374,7 +2588,7 @@ function calcLiquidoFuncionario(f, mes) {
     }
   });
 
-  return { totalProv, totalDesc, liquido: totalProv - totalDesc, detalhesProv, detalhesDesc, lancs };
+  return { totalProv, totalDesc, liquido: totalProv - totalDesc, detalhesProv, detalhesDesc, lancs, modo };
 }
 
 function calcLiquidoFuncionarioPeriodo(f, mesIni, mesFim) {
@@ -2420,6 +2634,7 @@ function gerarHoleritePDF() {
   const funcId   = document.getElementById('rel-func').value;
   const mes      = document.getElementById('rel-mes').value;
   const situacao = document.getElementById('rel-situacao')?.value || 'ativos';
+  const modoLanc = document.getElementById('rel-modo-lanc')?.value || 'normal';
 
   function matchSituacao(f) {
     const ativo = !f.dataDemissao || f.dataDemissao === '';
@@ -2430,7 +2645,7 @@ function gerarHoleritePDF() {
 
   const funcs = funcId
     ? cache.funcionarios.filter(f => f.id === funcId)
-    : cache.funcionarios.filter(matchSituacao);
+    : cache.funcionarios.filter(matchSituacao).sort((a,b) => (a.nome||'').localeCompare(b.nome||'','pt-BR'));
 
   if (!funcs.length) { showToast('Nenhum funcionário encontrado', 'err'); return; }
 
@@ -2438,14 +2653,14 @@ function gerarHoleritePDF() {
 
   funcs.forEach((f, fi) => {
     if (fi > 0) doc.addPage();
-    const calc = calcLiquidoFuncionario(f, mes);
+    const calc = calcLiquidoFuncionario(f, mes, modoLanc);
 
     // Header
     doc.setFillColor(1, 47, 36);
     doc.rect(0, 0, 210, 35, 'F');
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(18); doc.setFont('helvetica', 'bold');
-    doc.text('HOLERITE', 15, 14);
+    doc.text(modoLanc === 'ferias' ? 'HOLERITE — FÉRIAS' : 'HOLERITE', 15, 14);
     doc.setFontSize(10); doc.setFont('helvetica', 'normal');
     doc.text(`Referência: ${mes}`, 15, 22);
     doc.text(`Emitido em: ${new Date().toLocaleDateString('pt-BR')}`, 15, 28);
@@ -2692,5 +2907,5 @@ function toInputDate(val) {
 document.getElementById('mes-label').textContent = new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' });
 render('dashboard');
 </script>
-</body>
+<script src="https://replit-cdn.com/replit-pill/replit-pill.global.js" data-repl-id="398785e3-9220-47e0-b25a-77a9872b5a83"></script></body>
 </html>
