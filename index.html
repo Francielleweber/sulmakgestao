@@ -1987,7 +1987,7 @@ function modalLancamento(id, preFuncId, lancamentoExistente) {
 
         <div id="area-tipo"></div>
 
-        <div class="field"><label>Observação</label><textarea id="l-obs" placeholder="Informações adicionais...">${l.obs || ''}</textarea></div>
+        <div class="field"><label>Observação</label><textarea id="l-obs" placeholder="Informações adicionais...">${esc(l.obs || '')}</textarea></div>
         <div class="field">
           <label>Documento (atestado, comprovante...)</label>
           <div class="upload-area ${l.anexoNome ? 'has-file' : ''}" id="upload-area" onclick="document.getElementById('l-file').click()">
