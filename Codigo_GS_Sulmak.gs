@@ -15,6 +15,7 @@ const ABA_FERIAS       = 'Ferias';
 const COLS_FUNC = [
   'id','nome','cpf','dataNascimento','cargo','salario','insalubridade','adicionalSalario','ats',
   'salarioFamilia','auxilioCreche','auxilioCombustivel',
+  'planoSaudeFuncionario','planoSaudeDependentes',
   'dataAdmissao','dataDemissao',
   'endereco','telefone','email','pis','ctps',
   'banco','agencia','conta','tipoConta','pix','obs'
@@ -256,6 +257,7 @@ function getOrCreateSheet(nome, colunas) {
         const novaColuna = sheet.getLastColumn() + 1;
         sheet.getRange(1, novaColuna).setValue(col);
         sheet.getRange(1, novaColuna).setFontWeight('bold').setBackground('#1B4F8A').setFontColor('#FFFFFF');
+        SpreadsheetApp.flush(); // ← garante que o setValue seja confirmado antes do próximo getLastColumn()
       });
     }
   }
@@ -298,8 +300,9 @@ function migrarCabecalhos() {
 
 // ═══════════════════════════════════════════════════════
 //  migrarCabecalhosFuncionarios — rode UMA VEZ para
-//  reorganizar as colunas da aba Funcionarios na ordem
-//  correta de COLS_FUNC.
+//  adicionar as colunas novas (planoSaudeFuncionario e
+//  planoSaudeDependentes) sem perder dados existentes.
+//  A função só INSERE colunas ausentes — nunca apaga dados.
 // ═══════════════════════════════════════════════════════
 function migrarCabecalhosFuncionarios() {
   const ss    = SpreadsheetApp.getActiveSpreadsheet();
