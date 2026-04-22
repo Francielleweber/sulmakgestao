@@ -1777,47 +1777,61 @@ function _buildModalCopiar(titulo, lancamentos, mesOrigem) {
 
   // Salva os IDs globalmente com índice numérico seguro
   window._copiarIds = lancamentos.map(l => l.id);
-
-  const linhas = lancamentos.map((l, idx) => {
-    const f = cache.funcionarios.find(x => x.id === l.funcionarioId);
-    const descVal = l.valor ? fmt(l.valor) : (l.quantidade ? `${l.quantidade} ${l.unidade||''}` : '—');
-    return `
-      <tr style="vertical-align:middle;">
-        <td style="width:36px;text-align:center;padding:10px 8px;">
-          <input type="checkbox" checked data-idx="${idx}"
-            style="width:15px;height:15px;cursor:pointer;accent-color:var(--accent);">
-        </td>
-        <td style="padding:10px 8px;">
-          <span class="badge ${badgeClass(l.tipo)}">${l.tipo}</span>
-        </td>
-        ${f ? `<td style="padding:10px 8px;font-size:12px;color:var(--text2);">${f.nome}</td>` : ''}
-        <td style="padding:10px 8px;font-family:'DM Mono',monospace;font-size:12px;">${descVal}</td>
-        <td style="padding:10px 8px;font-size:12px;color:var(--text3);max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${l.obs || '—'}</td>
-      </tr>`;
-  }).join('');
+  // Inicializa lista de competências destino com o próximo mês
+  window._copiarDestinos = [mesDestino];
 
   const colFunc = lancamentos.some(l => cache.funcionarios.find(x => x.id === l.funcionarioId));
 
+  const linhas = lancamentos.map((l, idx) => {
+    const f = cache.funcionarios.find(x => x.id === l.funcionarioId);
+    const descVal = l.valor ? fmt(l.valor) : (l.quantidade ? (l.quantidade + ' ' + (l.unidade||'')) : '—');
+    const tdFunc = colFunc
+      ? (f ? '<td style="padding:10px 8px;font-size:12px;color:var(--text2);">' + f.nome + '</td>'
+           : '<td style="padding:10px 8px;font-size:12px;color:var(--text3);">—</td>')
+      : '';
+    return '<tr style="vertical-align:middle;">'
+      + '<td style="width:36px;text-align:center;padding:10px 8px;">'
+      +   '<input type="checkbox" checked data-idx="' + idx + '" style="width:15px;height:15px;cursor:pointer;accent-color:var(--accent);">'
+      + '</td>'
+      + '<td style="padding:10px 8px;"><span class="badge ' + badgeClass(l.tipo) + '">' + l.tipo + '</span></td>'
+      + tdFunc
+      + '<td style="padding:10px 8px;font-family:monospace;font-size:12px;">' + descVal + '</td>'
+      + '<td style="padding:10px 8px;font-size:12px;color:var(--text3);max-width:160px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">' + (l.obs || '—') + '</td>'
+      + '</tr>';
+  }).join('');
+
   return `
-    <div class="modal" style="width:680px;">
+    <div class="modal" style="width:700px;">
       <div class="modal-header">
         <h3>⎘ ${titulo}</h3>
         <button class="btn btn-icon" onclick="closeModal()">✕</button>
       </div>
       <div class="modal-body">
         <div class="info-banner" style="margin-bottom:16px;">
-          📋 <span>Selecione os lançamentos que deseja copiar e defina a nova competência e data.</span>
+          📋 <span>Selecione os lançamentos e as competências de destino. Você pode copiar para quantos meses quiser.</span>
         </div>
 
-        <div class="grid-2" style="margin-bottom:18px;">
-          <div class="field required">
-            <label>Nova Competência (mês destino)</label>
-            <input id="copy-competencia" type="month" value="${mesDestino}">
+        <div style="margin-bottom:18px;">
+          <label style="display:block;font-size:12px;font-weight:600;color:var(--text2);margin-bottom:8px;">
+            Competências de destino <span style="color:var(--red);">*</span>
+          </label>
+          <div style="display:flex;gap:8px;align-items:center;margin-bottom:10px;">
+            <input id="copy-mes-input" type="month" value="${mesDestino}"
+              style="padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);font-size:13px;font-family:'DM Sans',sans-serif;flex:1;">
+            <button class="btn btn-sm" onclick="adicionarDestinoMes()" style="white-space:nowrap;">
+              + Adicionar mês
+            </button>
           </div>
-          <div class="field required">
-            <label>Data do lançamento no destino</label>
-            <input id="copy-data" type="date" value="${hoje}">
+          <div id="copy-destinos-chips" style="display:flex;flex-wrap:wrap;gap:6px;min-height:32px;padding:6px 10px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--bg);">
           </div>
+          <div style="font-size:11px;color:var(--text3);margin-top:6px;">
+            Os lançamentos serão copiados para cada mês listado acima.
+          </div>
+        </div>
+
+        <div class="field required" style="margin-bottom:18px;">
+          <label>Data do lançamento no destino</label>
+          <input id="copy-data" type="date" value="${hoje}">
         </div>
 
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
@@ -1830,7 +1844,7 @@ function _buildModalCopiar(titulo, lancamentos, mesOrigem) {
           </div>
         </div>
 
-        <div style="border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;max-height:300px;overflow-y:auto;">
+        <div style="border:1px solid var(--border);border-radius:var(--radius-sm);overflow:hidden;max-height:260px;overflow-y:auto;">
           <table style="width:100%;border-collapse:collapse;">
             <thead>
               <tr style="background:var(--bg);">
@@ -1858,11 +1872,55 @@ window.toggleChecksCopiar = function(val) {
   document.querySelectorAll('#copy-tbody input[type=checkbox]').forEach(cb => cb.checked = val);
 };
 
+function _renderDestinosChips() {
+  const container = document.getElementById('copy-destinos-chips');
+  if (!container) return;
+  const destinos = window._copiarDestinos || [];
+  if (!destinos.length) {
+    container.innerHTML = '<span style="font-size:12px;color:var(--text3);padding:2px 4px;">Nenhuma competencia adicionada.</span>';
+    return;
+  }
+  container.innerHTML = destinos
+    .slice()
+    .sort()
+    .map(m => {
+      const [y, mo] = m.split('-');
+      const label = new Date(Number(y), Number(mo) - 1, 1)
+        .toLocaleDateString('pt-BR', { month: 'short', year: 'numeric' });
+      return `
+        <span style="display:inline-flex;align-items:center;gap:5px;background:var(--accent-light);color:var(--accent-text);
+          border:1px solid #B8CEE8;border-radius:100px;padding:4px 10px;font-size:12px;font-weight:500;">
+          ${label}
+          <button onclick="removerDestinoMes('${m}')"
+            style="border:none;background:none;cursor:pointer;color:var(--accent-text);font-size:14px;line-height:1;padding:0;margin-left:2px;opacity:0.7;"
+            title="Remover">&#x2715;</button>
+        </span>`;
+    }).join('');
+}
+
+window.adicionarDestinoMes = function() {
+  const input = document.getElementById('copy-mes-input');
+  const val = input ? input.value : '';
+  if (!val) { showToast('Selecione um mes para adicionar.', 'err'); return; }
+  if (!window._copiarDestinos) window._copiarDestinos = [];
+  if (window._copiarDestinos.includes(val)) {
+    showToast('Este mes ja foi adicionado.', 'err'); return;
+  }
+  window._copiarDestinos.push(val);
+  _renderDestinosChips();
+};
+
+window.removerDestinoMes = function(mes) {
+  window._copiarDestinos = (window._copiarDestinos || []).filter(m => m !== mes);
+  _renderDestinosChips();
+};
+
 function modalCopiarFuncionario(funcId, mes) {
   const lancs = cache.lancamentos.filter(l => l.funcionarioId === funcId && mesDeData(l.competencia || l.mes) === mes);
   if (!lancs.length) { showToast('Nenhum lançamento para copiar.', 'err'); return; }
   const f = cache.funcionarios.find(x => x.id === funcId);
   openModal(_buildModalCopiar(`Copiar lançamentos — ${f ? f.nome : ''}`, lancs, mes));
+  setTimeout(_renderDestinosChips, 50);
 }
 
 function modalCopiarTodos() {
@@ -1873,13 +1931,16 @@ function modalCopiarTodos() {
   if (funcId) lancs = lancs.filter(l => l.funcionarioId === funcId);
   if (!lancs.length) { showToast('Nenhum lançamento para copiar.', 'err'); return; }
   openModal(_buildModalCopiar(`Copiar todos os lançamentos de ${mes}`, lancs, mes));
+  setTimeout(_renderDestinosChips, 50);
 }
 
 async function executarCopia() {
   const todosIds = window._copiarIds || [];
-  const competencia = document.getElementById('copy-competencia')?.value;
-  const dataLanc    = document.getElementById('copy-data')?.value;
-  if (!competencia || !dataLanc) { showToast('Preencha competência e data.', 'err'); return; }
+  const destinos  = (window._copiarDestinos || []).slice().sort();
+  const dataLanc  = document.getElementById('copy-data')?.value;
+
+  if (!destinos.length) { showToast('Adicione ao menos uma competência de destino.', 'err'); return; }
+  if (!dataLanc)        { showToast('Preencha a data do lançamento.', 'err'); return; }
 
   const allChecks = Array.from(document.querySelectorAll('#copy-tbody input[type=checkbox]'));
   const selecionados = todosIds.filter((id, idx) => {
@@ -1889,30 +1950,36 @@ async function executarCopia() {
   if (!selecionados.length) { showToast('Nenhum lançamento selecionado.', 'err'); return; }
 
   let copiados = 0;
-  for (const id of selecionados) {
-    const orig = cache.lancamentos.find(l => l.id === id);
-    if (!orig) continue;
-    const novo = {
-      ...orig,
-      id:             uid(),
-      mes:            competencia,
-      competencia:    competencia,
-      dataLancamento: dataLanc,
-    };
-    if (config.gsUrl) {
-      try { await saveLancamento(novo); } catch(e) { /* continua */ }
+  for (const competencia of destinos) {
+    for (const id of selecionados) {
+      const orig = cache.lancamentos.find(l => l.id === id);
+      if (!orig) continue;
+      const novo = {
+        ...orig,
+        id:             uid(),
+        mes:            competencia,
+        competencia:    competencia,
+        dataLancamento: dataLanc,
+      };
+      if (config.gsUrl) {
+        try { await saveLancamento(novo); } catch(e) { /* continua */ }
+      }
+      cache.lancamentos.push(novo);
+      copiados++;
     }
-    cache.lancamentos.push(novo);
-    copiados++;
   }
 
   saveCache();
   closeModal();
-  // Navega para a competência copiada
+  // Navega para a última competência copiada
+  const ultimaMes = destinos[destinos.length - 1];
   const selMes = document.getElementById('sel-mes');
-  if (selMes) { selMes.value = competencia; }
+  if (selMes) { selMes.value = ultimaMes; }
   renderLancArea();
-  showToast(`✓ ${copiados} lançamento(s) copiado(s) para ${competencia}`, 'ok');
+  const mesesLabel = destinos.length === 1
+    ? destinos[0]
+    : `${destinos.length} competências`;
+  showToast(`✓ ${copiados} lançamento(s) copiado(s) para ${mesesLabel}`, 'ok');
 }
 
 function modalLancamento(id, preFuncId, lancamentoExistente) {
