@@ -1263,6 +1263,8 @@ function initFuncionarioMasks() {
   applyMaskCurrency('f-salario-familia');
   applyMaskCurrency('f-auxilio-creche');
   applyMaskCurrency('f-auxilio-combustivel');
+  applyMaskCurrency('f-plano-saude-funcionario');
+  applyMaskCurrency('f-plano-saude-dependentes');
 }
 
 function initFeriasMasks() {
@@ -1299,6 +1301,7 @@ function modalFuncionario(id) {
           <div class="grid-2">
             <div class="field required"><label>Nome completo</label><input id="f-nome" value="${f ? esc(f.nome) : ''}" placeholder="Nome Sobrenome"></div>
             <div class="field required"><label>CPF</label><input id="f-cpf" value="${f ? esc(f.cpf) : ''}" placeholder="000.000.000-00"></div>
+             <div class="field"><label>Data de Nascimento</label><input id="f-nasc" type="date" value="${f ? toInputDate(f.dataNascimento) : ''}"></div>
           </div>
           <div class="grid-2">
             <div class="field"><label>Endereço (Rua / Av.)</label><input id="f-end-rua" value="${f ? esc((f.endereco||'').split('|')[0]||'') : ''}" placeholder="Ex: Rua das Flores"></div>
@@ -1322,34 +1325,37 @@ function modalFuncionario(id) {
           </div>
         </div>
 
+        <div class="section-divider" style="display:flex;align-items:center;justify-content:space-between;">
+            <span>Dados Contratuais</span>
+          </div>  
         <div id="tp2" style="display:none;">
           <div class="grid-2">
             <div class="field required"><label>Cargo</label><input id="f-cargo" value="${f ? esc(f.cargo||'') : ''}" placeholder="Ex: Analista, Gerente..."></div>
             <div class="field required"><label>Salário Base (R$)</label><input id="f-salario" type="text" inputmode="numeric" value="${f ? maskCurrency(f.salario) : ''}" placeholder="R$ 0,00"></div>
-          </div>
+           <div class="field"><label>Data de admissão</label><input id="f-adm" type="date" value="${f ? toInputDate(f.dataAdmissao) : ''}"></div>
+            <div class="field"><label>Data de demissão</label><input id="f-dem" type="date" value="${f ? toInputDate(f.dataDemissao) : ''}"></div>
+          <div class="field"><label>PIS/PASEP</label><input id="f-pis" value="${f ? esc(f.pis||'') : ''}" placeholder="000.00000.00-0"></div>
+            <div class="field"><label>Número CTPS</label><input id="f-ctps" value="${f ? esc(f.ctps||'') : ''}" placeholder="Número / Série / UF"></div>
+            </div>
           <div class="grid-2">
             <div class="field"><label>Insalubridade (R$)</label><input id="f-insalubridade" type="text" inputmode="numeric" value="${f ? maskCurrency(f.insalubridade || 0) : ''}" placeholder="R$ 0,00"></div>
             <div class="field"><label>Adicional de Salário (R$)</label><input id="f-adicional-salario" type="text" inputmode="numeric" value="${f ? maskCurrency(f.adicionalSalario || 0) : ''}" placeholder="R$ 0,00"></div>
           </div>
           <div class="grid-2">
             <div class="field"><label>ATS — Adic. por Tempo de Serviço (R$)</label><input id="f-ats" type="text" inputmode="numeric" value="${f ? maskCurrency(f.ats || 0) : ''}" placeholder="R$ 0,00"></div>
-            <div class="field"><label>Data de Nascimento</label><input id="f-nasc" type="date" value="${f ? toInputDate(f.dataNascimento) : ''}"></div>
           </div>
           <div class="grid-3">
             <div class="field"><label>Salário Família (R$)</label><input id="f-salario-familia" type="text" inputmode="numeric" value="${f ? maskCurrency(f.salarioFamilia || 0) : ''}" placeholder="R$ 0,00"></div>
             <div class="field"><label>Auxílio Creche (R$)</label><input id="f-auxilio-creche" type="text" inputmode="numeric" value="${f ? maskCurrency(f.auxilioCreche || 0) : ''}" placeholder="R$ 0,00"></div>
             <div class="field"><label>Auxílio Combustível (R$)</label><input id="f-auxilio-combustivel" type="text" inputmode="numeric" value="${f ? maskCurrency(f.auxilioCombustivel || 0) : ''}" placeholder="R$ 0,00"></div>
           </div>
-          <div class="grid-2">
-            <div class="field"><label>Data de admissão</label><input id="f-adm" type="date" value="${f ? toInputDate(f.dataAdmissao) : ''}"></div>
-            <div class="field"><label>Data de demissão</label><input id="f-dem" type="date" value="${f ? toInputDate(f.dataDemissao) : ''}"></div>
+          <div class="section-divider" style="display:flex;align-items:center;justify-content:space-between;">
+            <span>Plano de Saúde</span>
           </div>
           <div class="grid-2">
-            <div class="field"><label>PIS/PASEP</label><input id="f-pis" value="${f ? esc(f.pis||'') : ''}" placeholder="000.00000.00-0"></div>
-            <div class="field"><label>Número CTPS</label><input id="f-ctps" value="${f ? esc(f.ctps||'') : ''}" placeholder="Número / Série / UF"></div>
+            <div class="field"><label>Valor Funcionário (R$)</label><input id="f-plano-saude-funcionario" type="text" inputmode="numeric" value="${f ? maskCurrency(f.planoSaudeFuncionario || 0) : ''}" placeholder="R$ 0,00" style="background:var(--amber-bg);border-color:#e8d48b;"></div>
+            <div class="field"><label>Valor Dependentes (R$)</label><input id="f-plano-saude-dependentes" type="text" inputmode="numeric" value="${f ? maskCurrency(f.planoSaudeDependentes || 0) : ''}" placeholder="R$ 0,00" style="background:var(--amber-bg);border-color:#e8d48b;"></div>
           </div>
-        </div>
-
         <div id="tp3" style="display:none;">
           <div class="grid-2">
             <div class="field"><label>Banco</label><input id="f-banco" value="${f ? esc(f.banco||'') : ''}" placeholder="Ex: Itaú, Bradesco, Nubank..."></div>
@@ -1366,7 +1372,6 @@ function modalFuncionario(id) {
             <div class="field"><label>Chave PIX</label><input id="f-pix" value="${f ? esc(f.pix||'') : ''}" placeholder="CPF / e-mail / tel"></div>
           </div>
         </div>
-
         <div id="tp4" style="display:none;">
           <div class="info-banner" style="margin-bottom:14px;">
             🏖️ <span>Registre os dados de férias.</span>
@@ -1459,11 +1464,15 @@ async function salvarFuncionarioLocal(id) {
   const salarioFamilia = parseCurrency(document.getElementById('f-salario-familia')?.value || '');
   const auxilioCreche = parseCurrency(document.getElementById('f-auxilio-creche')?.value || '');
   const auxilioCombustivel = parseCurrency(document.getElementById('f-auxilio-combustivel')?.value || '');
+  // Plano de Saúde — apenas informativo, não soma nos proventos
+  const planoSaudeFuncionario = parseCurrency(document.getElementById('f-plano-saude-funcionario')?.value || '');
+  const planoSaudeDependentes = parseCurrency(document.getElementById('f-plano-saude-dependentes')?.value || '');
 
   const obj = {
     id:           id || '',
     nome, cpf, cargo, salario, insalubridade, adicionalSalario, ats,
     salarioFamilia, auxilioCreche, auxilioCombustivel,
+    planoSaudeFuncionario, planoSaudeDependentes,
     endereco:     [
                     document.getElementById('f-end-rua')?.value    || '',
                     document.getElementById('f-end-num')?.value    || '',
