@@ -2567,13 +2567,22 @@ function renderHolerite(c) {
               <input type="month" id="rel-periodo-fim" value="${mesAtual}">
             </div>
           </div>
-          <div class="field" style="margin-top:4px;">
-            <label>Filtrar situação</label>
-            <select id="rel-situacao" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);font-size:13px;font-family:'DM Sans',sans-serif;">
-              <option value="ativos">Somente Ativos</option>
-              <option value="inativos">Somente Inativos</option>
-              <option value="todos">Todos (Ativos + Inativos)</option>
-            </select>
+          <div class="grid-2" style="margin-top:4px;">
+            <div class="field">
+              <label>Filtrar por funcionário</label>
+              <select id="rel-geral-func" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);font-size:13px;font-family:'DM Sans',sans-serif;">
+                <option value="">Todos os funcionários</option>
+                ${funcsOrdenados.map(f => '<option value="' + f.id + '">' + f.nome + '</option>').join('')}
+              </select>
+            </div>
+            <div class="field">
+              <label>Filtrar situação</label>
+              <select id="rel-situacao" style="width:100%;padding:8px 12px;border:1px solid var(--border);border-radius:var(--radius-sm);background:var(--surface);color:var(--text);font-size:13px;font-family:'DM Sans',sans-serif;">
+                <option value="ativos">Somente Ativos</option>
+                <option value="inativos">Somente Inativos</option>
+                <option value="todos">Todos (Ativos + Inativos)</option>
+              </select>
+            </div>
           </div>
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:4px;">
@@ -2819,11 +2828,21 @@ function gerarHoleritePDF() {
 
 function gerarRelatorioGeral() {
   const { jsPDF } = window.jspdf;
-  const mesIni   = document.getElementById('rel-periodo-ini')?.value;
-  const mesFim   = document.getElementById('rel-periodo-fim')?.value;
-  const situacao = document.getElementById('rel-situacao')?.value || 'ativos';
+  const mesIni    = document.getElementById('rel-periodo-ini')?.value;
+  const mesFim    = document.getElementById('rel-periodo-fim')?.value;
+  const situacao  = document.getElementById('rel-situacao')?.value || 'ativos';
+  const funcFiltro = document.getElementById('rel-geral-func')?.value || '';
   if (!mesIni || !mesFim) { showToast('Selecione o período inicial e final', 'err'); return; }
-  if (mesIni > mesFim) { showToast('Mês inicial deve ser anterior ao final', 'err'); return; }
+  if (mesIni > mesFim)    { showToast('Mês inicial deve ser anterior ao final', 'err'); return; }
+
+  // Monta lista ordenada de competências no período
+  const mesesPeriodo = [];
+  let m = mesIni;
+  while (m <= mesFim) {
+    mesesPeriodo.push(m);
+    const [y, mo] = m.split('-').map(Number);
+    m = mo === 12 ? (y+1) + '-01' : y + '-' + String(mo+1).padStart(2,'0');
+  }
 
   function matchSituacao(f) {
     const ativo = !f.dataDemissao || f.dataDemissao === '';
@@ -2832,82 +2851,164 @@ function gerarRelatorioGeral() {
     return true;
   }
 
+  function fmtMes(ym) {
+    const [y, mo] = ym.split('-').map(Number);
+    const nomes = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+    return nomes[mo-1] + '/' + y;
+  }
+
+  let funcs = cache.funcionarios
+    .filter(matchSituacao)
+    .sort((a,b) => (a.nome||'').localeCompare(b.nome||'','pt-BR'));
+  if (funcFiltro) funcs = funcs.filter(f => f.id === funcFiltro);
+
+  if (!funcs.length) { showToast('Nenhum funcionário encontrado com os filtros selecionados.', 'err'); return; }
+
   const situacaoLabel = { ativos: 'Ativos', inativos: 'Inativos', todos: 'Todos' }[situacao] || '';
-  const periodoLabel = mesIni === mesFim ? mesIni : `${mesIni} a ${mesFim}`;
+  const periodoLabel  = mesIni === mesFim ? fmtMes(mesIni) : (fmtMes(mesIni) + ' a ' + fmtMes(mesFim));
+  const funcLabel     = funcFiltro ? (funcs[0] ? funcs[0].nome : '') : 'Todos';
+
   const doc = new jsPDF({ orientation: 'l', unit: 'mm', format: 'a4' });
 
-  // Cabeçalho azul
+  // ── Cabeçalho ──
   doc.setFillColor(1, 47, 36);
   doc.rect(0, 0, 297, 22, 'F');
   doc.setTextColor(255, 255, 255);
-  doc.setFontSize(13); doc.setFont('helvetica', 'bold');
-  doc.text(`Relatório Geral de Folha de Pagamento — ${periodoLabel} · ${situacaoLabel}`, 148, 14, { align: 'center' });
+  doc.setFontSize(12); doc.setFont('helvetica', 'bold');
+  doc.text('Relatório Geral de Folha de Pagamento', 148, 9, { align: 'center' });
+  doc.setFontSize(9); doc.setFont('helvetica', 'normal');
+  doc.text('Período: ' + periodoLabel + '  ·  Situação: ' + situacaoLabel + '  ·  Funcionário: ' + funcLabel, 148, 17, { align: 'center' });
 
-  // Colunas: Funcionário(10) | Cargo(75) | Sal.Base(130) | Recebimentos(165) | Descontos(205) | Líquido(245)
-  const COL = { nome: 10, cargo: 65, salBase: 130, receb: 165, desc: 205, liq: 245 };
+  // ── Colunas ──
+  // Funcionário(10) | Cargo(68) | Competência(118) | Sal.Base(158) | Proventos(193) | Descontos(232) | Líquido(272)
+  const COL = { nome: 10, cargo: 68, comp: 118, salBase: 158, prov: 193, desc: 232, liq: 272 };
+  const PAGE_H = 200;
 
-  let y = 32;
-  doc.setTextColor(26, 25, 22);
-  doc.setFontSize(8.5); doc.setFont('helvetica', 'bold');
-  doc.text('Funcionário',    COL.nome,  y);
-  doc.text('Cargo',          COL.cargo, y);
-  doc.text('Salário Base',   COL.salBase, y, { align: 'right' });
-  doc.text('Recebimentos',   COL.receb,   y, { align: 'right' });
-  doc.text('Descontos',      COL.desc,    y, { align: 'right' });
-  doc.text('Líquido Final',  COL.liq,     y, { align: 'right' });
-  y += 3;
-  doc.setDrawColor(200, 197, 190);
-  doc.line(8, y, 285, y);
-  y += 6;
+  function drawHeader(doc, y) {
+    doc.setFontSize(8); doc.setFont('helvetica', 'bold');
+    doc.setTextColor(100, 98, 90);
+    doc.text('Funcionário',   COL.nome,    y);
+    doc.text('Cargo',         COL.cargo,   y);
+    doc.text('Competência',   COL.comp,    y);
+    doc.text('Sal. Base',     COL.salBase, y, { align: 'right' });
+    doc.text('Proventos',     COL.prov,    y, { align: 'right' });
+    doc.text('Descontos',     COL.desc,    y, { align: 'right' });
+    doc.text('Líquido',       COL.liq,     y, { align: 'right' });
+    y += 3;
+    doc.setDrawColor(200, 197, 190);
+    doc.line(8, y, 289, y);
+    return y + 5;
+  }
 
-  let totSalBase = 0, totReceb = 0, totDesc = 0, totLiq = 0;
-  doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5);
+  let y = drawHeader(doc, 28);
 
-  cache.funcionarios.filter(matchSituacao).forEach(f => {
-    const calc = calcLiquidoFuncionarioPeriodo(f, mesIni, mesFim);
-    // Recebimentos = salário base + todas as entradas
-    const recebimentos = calc.totalProv;
-    // Descontos = todas as saídas (inclui adiantamento)
-    const descontos = calc.totalDesc;
-    const liquido = calc.liquido;
+  let gtSalBase = 0, gtProv = 0, gtDesc = 0, gtLiq = 0;
 
-    totSalBase += calc.salarioTotal;
-    totReceb   += recebimentos;
-    totDesc    += descontos;
-    totLiq     += liquido;
+  funcs.forEach((f, fi) => {
+    // Separador visual entre funcionários (exceto primeiro)
+    if (fi > 0) {
+      doc.setDrawColor(220, 217, 210);
+      doc.line(8, y - 2, 289, y - 2);
+      y += 1;
+    }
 
-    doc.setTextColor(26, 25, 22);
-    doc.text(String(f.nome  || '').slice(0, 28), COL.nome,  y);
-    doc.text(String(f.cargo || '').slice(0, 28), COL.cargo, y);
-    doc.text(fmt(calc.salarioTotal), COL.salBase, y, { align: 'right' });
-    doc.setTextColor(26, 107, 69);
-    doc.text(fmt(recebimentos),      COL.receb,   y, { align: 'right' });
-    doc.setTextColor(139, 32, 32);
-    doc.text(fmt(descontos),         COL.desc,    y, { align: 'right' });
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(26, 25, 22);
-    doc.text(fmt(liquido),           COL.liq,     y, { align: 'right' });
-    doc.setFont('helvetica', 'normal');
-    y += 8;
-    if (y > 190) { doc.addPage(); y = 20; }
+    let subSalBase = 0, subProv = 0, subDesc = 0, subLiq = 0;
+    const primeiraLinha = y;
+
+    mesesPeriodo.forEach((mes, mi) => {
+      if (y > PAGE_H) {
+        doc.addPage();
+        y = drawHeader(doc, 15);
+      }
+
+      const calc = calcLiquidoFuncionarioPeriodo(f, mes, mes);
+
+      subSalBase += calc.salarioTotal;
+      subProv    += calc.totalProv;
+      subDesc    += calc.totalDesc;
+      subLiq     += calc.liquido;
+
+      doc.setFont('helvetica', 'normal'); doc.setFontSize(8);
+
+      // Nome e cargo apenas na primeira linha do funcionário
+      if (mi === 0) {
+        doc.setTextColor(26, 25, 22);
+        doc.setFont('helvetica', 'bold');
+        doc.text(String(f.nome  || '').slice(0, 30), COL.nome,  y);
+        doc.setFont('helvetica', 'normal');
+        doc.setTextColor(90, 88, 82);
+        doc.text(String(f.cargo || '').slice(0, 26), COL.cargo, y);
+      }
+
+      // Competência
+      doc.setTextColor(26, 25, 22);
+      doc.text(fmtMes(mes), COL.comp, y);
+
+      // Valores
+      doc.setTextColor(60, 60, 60);
+      doc.text(fmt(calc.salarioTotal), COL.salBase, y, { align: 'right' });
+      doc.setTextColor(26, 107, 69);
+      doc.text(fmt(calc.totalProv),    COL.prov,    y, { align: 'right' });
+      doc.setTextColor(139, 32, 32);
+      doc.text(fmt(calc.totalDesc),    COL.desc,    y, { align: 'right' });
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(26, 25, 22);
+      doc.text(fmt(calc.liquido),      COL.liq,     y, { align: 'right' });
+      doc.setFont('helvetica', 'normal');
+
+      y += 7;
+    });
+
+    // Subtotal do funcionário (apenas se período > 1 mês)
+    if (mesesPeriodo.length > 1) {
+      if (y > PAGE_H) { doc.addPage(); y = drawHeader(doc, 15); }
+      doc.setFillColor(240, 238, 233);
+      doc.rect(8, y - 4, 281, 7, 'F');
+      doc.setFont('helvetica', 'bold'); doc.setFontSize(7.5);
+      doc.setTextColor(60, 58, 52);
+      doc.text('Subtotal ' + String(f.nome || '').split(' ')[0], COL.comp, y, { align: 'right' });
+      doc.setTextColor(40, 80, 55);
+      doc.text(fmt(subProv),    COL.prov,    y, { align: 'right' });
+      doc.setTextColor(110, 30, 30);
+      doc.text(fmt(subDesc),    COL.desc,    y, { align: 'right' });
+      doc.setTextColor(26, 25, 22);
+      doc.text(fmt(subLiq),     COL.liq,     y, { align: 'right' });
+      y += 8;
+    }
+
+    gtSalBase += subSalBase;
+    gtProv    += subProv;
+    gtDesc    += subDesc;
+    gtLiq     += subLiq;
   });
 
-  // Linha de totais
-  doc.setDrawColor(200, 197, 190);
-  doc.line(8, y, 285, y);
-  y += 6;
+  // ── Total Geral ──
+  if (y > PAGE_H) { doc.addPage(); y = 15; }
+  doc.setDrawColor(100, 97, 90);
+  doc.line(8, y, 289, y);
+  y += 5;
+  doc.setFillColor(1, 47, 36);
+  doc.rect(8, y - 4, 281, 8, 'F');
   doc.setFont('helvetica', 'bold'); doc.setFontSize(8.5);
-  doc.setTextColor(26, 25, 22);
-  doc.text('TOTAIS', COL.nome, y);
-  doc.text(fmt(totSalBase), COL.salBase, y, { align: 'right' });
-  doc.setTextColor(26, 107, 69);
-  doc.text(fmt(totReceb),   COL.receb,   y, { align: 'right' });
-  doc.setTextColor(139, 32, 32);
-  doc.text(fmt(totDesc),    COL.desc,    y, { align: 'right' });
-  doc.setTextColor(26, 25, 22);
-  doc.text(fmt(totLiq),     COL.liq,     y, { align: 'right' });
+  doc.setTextColor(255, 255, 255);
+  doc.text('TOTAL GERAL', COL.nome, y);
+  doc.text(fmt(gtSalBase), COL.salBase, y, { align: 'right' });
+  doc.text(fmt(gtProv),    COL.prov,    y, { align: 'right' });
+  doc.text(fmt(gtDesc),    COL.desc,    y, { align: 'right' });
+  doc.text(fmt(gtLiq),     COL.liq,     y, { align: 'right' });
 
-  doc.save(`relatorio_folha_${mesIni}_${mesFim}.pdf`);
+  // Rodapé
+  const totalPags = doc.getNumberOfPages();
+  for (let p = 1; p <= totalPags; p++) {
+    doc.setPage(p);
+    doc.setTextColor(180, 175, 165);
+    doc.setFontSize(7.5); doc.setFont('helvetica', 'normal');
+    doc.text('Sulmak Locações · Relatório gerado automaticamente', 8, 207);
+    doc.text('Pág. ' + p + ' / ' + totalPags, 289, 207, { align: 'right' });
+  }
+
+  const funcSufixo = funcFiltro && funcs[0] ? '_' + funcs[0].nome.replace(/ /g,'_').slice(0,20) : '';
+  doc.save('relatorio_folha_' + mesIni + '_' + mesFim + funcSufixo + '.pdf');
   showToast('✓ Relatório geral gerado!', 'ok');
 }
 
