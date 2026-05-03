@@ -1331,17 +1331,18 @@ function modalFuncionario(id) {
           </div>  
           <div class="grid-2">
             <div class="field required"><label>Cargo</label><input id="f-cargo" value="${f ? esc(f.cargo||'') : ''}" placeholder="Ex: Analista, Gerente..."></div>
-            <div class="field required"><label>Salário Base (R$)</label><input id="f-salario" type="text" inputmode="numeric" value="${f ? maskCurrency(f.salario) : ''}" placeholder="R$ 0,00"></div>
+            <div class="field"><label>CBO</label><input id="f-cbo" value="${f ? esc(f.cbo||'') : ''}" placeholder="Ex: 252105"></div>
            <div class="field"><label>Data de admissão</label><input id="f-adm" type="date" value="${f ? toInputDate(f.dataAdmissao) : ''}"></div>
             <div class="field"><label>Data de demissão</label><input id="f-dem" type="date" value="${f ? toInputDate(f.dataDemissao) : ''}"></div>
           <div class="field"><label>PIS/PASEP</label><input id="f-pis" value="${f ? esc(f.pis||'') : ''}" placeholder="000.00000.00-0"></div>
             <div class="field"><label>Número CTPS</label><input id="f-ctps" value="${f ? esc(f.ctps||'') : ''}" placeholder="Número / Série / UF"></div>
             </div>
           <div class="grid-2">
-            <div class="field"><label>Insalubridade (R$)</label><input id="f-insalubridade" type="text" inputmode="numeric" value="${f ? maskCurrency(f.insalubridade || 0) : ''}" placeholder="R$ 0,00"></div>
+            <div class="field required"><label>Salário Base (R$)</label><input id="f-salario" type="text" inputmode="numeric" value="${f ? maskCurrency(f.salario) : ''}" placeholder="R$ 0,00"></div>
             <div class="field"><label>Adicional de Salário (R$)</label><input id="f-adicional-salario" type="text" inputmode="numeric" value="${f ? maskCurrency(f.adicionalSalario || 0) : ''}" placeholder="R$ 0,00"></div>
           </div>
           <div class="grid-2">
+            <div class="field"><label>Insalubridade (R$)</label><input id="f-insalubridade" type="text" inputmode="numeric" value="${f ? maskCurrency(f.insalubridade || 0) : ''}" placeholder="R$ 0,00"></div>
             <div class="field"><label>ATS — Adic. por Tempo de Serviço (R$)</label><input id="f-ats" type="text" inputmode="numeric" value="${f ? maskCurrency(f.ats || 0) : ''}" placeholder="R$ 0,00"></div>
           </div>
           <div class="grid-3">
@@ -1457,6 +1458,7 @@ async function salvarFuncionarioLocal(id) {
   const nome   = (document.getElementById('f-nome')?.value || '').trim();
   const cpf    = (document.getElementById('f-cpf')?.value  || '').trim();
   const cargo  = (document.getElementById('f-cargo')?.value || '').trim();
+  const cbo    = (document.getElementById('f-cbo')?.value   || '').trim();
   const salario = parseCurrency(document.getElementById('f-salario')?.value || '');
   if (!nome || !cpf) { showToast('Nome e CPF são obrigatórios', 'err'); return; }
 
@@ -1472,7 +1474,7 @@ async function salvarFuncionarioLocal(id) {
 
   const obj = {
     id:           id || '',
-    nome, cpf, cargo, salario, insalubridade, adicionalSalario, ats,
+    nome, cpf, cargo, cbo, salario, insalubridade, adicionalSalario, ats,
     salarioFamilia, auxilioCreche, auxilioCombustivel,
     planoSaudeFuncionario, planoSaudeDependentes,
     endereco:     [
